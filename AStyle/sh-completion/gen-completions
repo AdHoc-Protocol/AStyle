@@ -94,6 +94,10 @@ parser:option "--pad-negation"
    :args "?"
    :choices {"before"}
 
+parser:option "--pad-type-colon"
+   :description "Scala: set the space padding around a type colon"
+   :choices {"after", "all", "none"}
+
 parser:option "--pad-include"
    :description "Insert space padding after include directives"
    :args "?"
@@ -196,7 +200,7 @@ parser:flag "--break-after-logical"
 
 parser:option "--mode"
    :description "Set input syntax mode"
-   :choices {"c", "java", "cs", "objc", "js", "jsx", "ts", "tsx", "go", "rust", "kotlin", "swift", "dart", "gsc", "ghc"}
+   :choices {"c", "java", "cs", "objc", "js", "jsx", "ts", "tsx", "go", "rust", "kotlin", "swift", "dart", "scala", "gsc", "ghc"}
 
 parser:option "--pad-method-prefix"
    :description "Insert space padding after the '-' or '+' Objective-C method prefix"

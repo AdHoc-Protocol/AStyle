@@ -129,6 +129,9 @@ bool setLanguageFromFileName(ASFormatter& formatter, std::string_view fileName)
 		{ ".kts",   KOTLIN_TYPE, false },
 		{ ".swift", SWIFT_TYPE,  false },
 		{ ".dart",  DART_TYPE,   false },
+		{ ".scala", SCALA_TYPE,  false },
+		{ ".sc",    SCALA_TYPE,  false },
+		{ ".sbt",   SCALA_TYPE,  false },
 	};
 
 	// the suffix comparison is not case sensitive
@@ -521,7 +524,11 @@ void ASConsole::formatCinToCout()
 
 	while (formatter.hasMoreLines())
 	{
-		std::cout << lexer.restoreLine(formatter.nextLine());
+		std::string restored = lexer.restoreLine(formatter.nextLine());
+		// a line of a virtual brace of ASLexer is not output
+		if (lexer.isLineRemoved())
+			continue;
+		std::cout << restored;
 
 		if (LINEEND_DEFAULT == formatter.getLineEndFormat())
 		{
@@ -608,8 +615,13 @@ void ASConsole::formatFile(const std::string& fileName_)
 	while (formatter.hasMoreLines())
 	{
 		nextLine = formatter.nextLine();
-		out << lexer.restoreLine(nextLine);
-		linesOut++;
+		std::string restored = lexer.restoreLine(nextLine);
+		// a line of a virtual brace of ASLexer is not output, it is in the input too
+		if (!lexer.isLineRemoved())
+		{
+			out << restored;
+			linesOut++;
+		}
 
 		if (LINEEND_DEFAULT == formatter.getLineEndFormat())
 		{
@@ -618,7 +630,8 @@ void ASConsole::formatFile(const std::string& fileName_)
 
 		if (formatter.hasMoreLines())
 		{
-			out << outputEOL;
+			if (!lexer.isLineRemoved())
+				out << outputEOL;
 		}
 		else
 		{
@@ -2040,7 +2053,7 @@ void ASConsole::printHelp() const
 	std::cout << "    An opening paren or bracket ending a line opens an indented\n";
 	std::cout << "    block that is closed at the indent of the statement.\n";
 	std::cout << "    This is the default for JavaScript, TypeScript, Go, Rust,\n";
-	std::cout << "    Kotlin, Swift and Dart.\n";
+	std::cout << "    Kotlin, Swift, Dart and Scala.\n";
 	std::cout << '\n';
 	std::cout << "    --align-continuation\n";
 	std::cout << "    Align continuation lines with an assignment or a paren.\n";
@@ -2088,6 +2101,15 @@ void ASConsole::printHelp() const
 	std::cout << '\n';
 	std::cout << "    --pad-negation=before\n";
 	std::cout << "    Insert space padding also before negations.\n";
+	std::cout << '\n';
+	std::cout << "    --pad-type-colon=after\n";
+	std::cout << "    Scala: one space after a type colon and none before, x: Int.\n";
+	std::cout << '\n';
+	std::cout << "    --pad-type-colon=all\n";
+	std::cout << "    Scala: one space before and after a type colon, x : Int.\n";
+	std::cout << '\n';
+	std::cout << "    --pad-type-colon=none\n";
+	std::cout << "    Scala: no space around a type colon, x:Int.\n";
 	std::cout << '\n';
 	std::cout << "    --pad-paren  OR  -P\n";
 	std::cout << "    Insert space padding around parenthesis on both the outside\n";
@@ -2281,12 +2303,17 @@ void ASConsole::printHelp() const
 	std::cout << "    --mode=dart\n";
 	std::cout << "    Indent a Dart source file.\n";
 	std::cout << '\n';
+	std::cout << "    --mode=scala\n";
+	std::cout << "    Indent a Scala 2 or Scala 3 source file, also with the\n";
+	std::cout << "    significant indentation of Scala 3.\n";
+	std::cout << '\n';
 	std::cout << "    --mode=gsc\n";
 	std::cout << "    Indent a GSC source file.\n";
 	std::cout << '\n';
 	std::cout << "    Without a mode option the language is detected from the file\n";
 	std::cout << "    suffix: .java .cs .js .mjs .cjs .jsx .ts .mts .cts .tsx .go .rs\n";
-	std::cout << "    .kt .kts .swift .dart .gsc .ghc, any other suffix is C/C++.\n";
+	std::cout << "    .kt .kts .swift .dart .scala .sc .sbt .gsc .ghc, any other suffix\n";
+	std::cout << "    is C/C++.\n";
 	std::cout << "    With --stdin the suffix of the --stdin file is used.\n";
 	std::cout << '\n';
 	std::cout << "Objective-C Options:\n";
@@ -3354,6 +3381,11 @@ void ASOptions::parseOption(const std::string& arg)
 		formatter.setDartStyle();
 		formatter.setModeManuallySet(true);
 	}
+	else if (isOption(arg, "mode=scala"))
+	{
+		formatter.setScalaStyle();
+		formatter.setModeManuallySet(true);
+	}
 	else if (isOption(arg, "mode=objc"))
 	{
 		formatter.setObjCStyle();
@@ -3567,6 +3599,18 @@ void ASOptions::parseOption(const std::string& arg)
 	else if (isOption(arg, "pad-negation=before"))
 	{
 		formatter.setNegationPaddingMode(NEGATION_PAD_BEFORE);
+	}
+	else if (isOption(arg, "pad-type-colon=after"))
+	{
+		formatter.setTypeColonPaddingMode(TYPE_COLON_PAD_AFTER);
+	}
+	else if (isOption(arg, "pad-type-colon=all"))
+	{
+		formatter.setTypeColonPaddingMode(TYPE_COLON_PAD_ALL);
+	}
+	else if (isOption(arg, "pad-type-colon=none"))
+	{
+		formatter.setTypeColonPaddingMode(TYPE_COLON_PAD_NONE);
 	}
 	else if (isOption(arg, "pad-include"))
 	{
@@ -4577,7 +4621,11 @@ extern "C" EXPORT char* STDCALL AStyleMain(const char* pSourceIn,		// the source
 
 	while (formatter.hasMoreLines())
 	{
-		out << lexer.restoreLine(formatter.nextLine());
+		std::string restored = lexer.restoreLine(formatter.nextLine());
+		// a line of a virtual brace of ASLexer is not output
+		if (lexer.isLineRemoved())
+			continue;
+		out << restored;
 		if (formatter.hasMoreLines())
 			out << streamIterator.getLastOutputEOL();
 		else
@@ -4699,7 +4747,7 @@ void printWelcome()
 	boxLine(version + "  -  the source code formatter", title);
 	boxLine("", "");
 	boxLine("C, C++, Objective-C, C#, Java, JavaScript, TypeScript, JSX,", "");
-	boxLine("Go, Rust, Kotlin, Swift and Dart", "");
+	boxLine("Go, Rust, Kotlin, Swift, Dart and Scala", "");
 	std::cout << "  " << dim << "╰" << rule << "╯" << reset << "\n\n";
 
 	std::cout << "  " << bold << "astyle is a command line program, it has no window of its own." << reset << '\n';

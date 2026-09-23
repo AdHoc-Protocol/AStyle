@@ -38,10 +38,17 @@ namespace astyle
 // definitions
 //----------------------------------------------------------------------------
 
+// Marks a brace inserted by ASLexer for an indentation region of Scala 3,
+// the formatter keeps it where it is, the line of a closing one is removed.
+constexpr char VIRTUAL_BRACE = '\x15';
+// Follows a '(' inserted by ASLexer around a header condition and precedes its ')'.
+constexpr char VIRTUAL_PAREN = '\x16';
+
 enum FileType
 {
     C_TYPE = 0, JAVA_TYPE = 1, SHARP_TYPE = 2, JS_TYPE = 3, OBJC_TYPE = 4, GSC_TYPE = 5,
     TS_TYPE = 6, GO_TYPE = 7, RUST_TYPE = 8, KOTLIN_TYPE = 9, SWIFT_TYPE = 10, DART_TYPE = 11,
+    SCALA_TYPE = 12,
     INVALID_TYPE = -1
 };
 
@@ -165,6 +172,15 @@ enum NegationPaddingMode
     NEGATION_PAD_BEFORE
 };
 
+// the spaces around a Scala type colon, e.g. "x: Int"
+enum TypeColonPaddingMode
+{
+    TYPE_COLON_PAD_NO_CHANGE,
+    TYPE_COLON_PAD_NONE,        // "x:Int"
+    TYPE_COLON_PAD_AFTER,       // "x: Int"
+    TYPE_COLON_PAD_ALL          // "x : Int"
+};
+
 enum IncludeDirectivePaddingMode
 {
     INCLUDE_PAD_NO_CHANGE,
@@ -273,6 +289,7 @@ public:
     [[nodiscard]] bool isActive() const;
     [[nodiscard]] std::string restoreLine(const std::string& line) const;
     [[nodiscard]] bool hasChangedLiteral() const;
+    [[nodiscard]] bool isLineRemoved() const;
 
 private:
     struct Literal
@@ -294,6 +311,7 @@ private:
     std::string forcedEOL;
     std::vector<Literal> literals;
     mutable bool changedLiteral;       // a restored literal differs from the original
+    mutable bool lineRemoved;          // the last restored line had only virtual braces
 
     [[nodiscard]] std::string restoreLiteral(const Literal& literal, std::string_view newIndent) const;
     [[nodiscard]] size_t indentWidth(std::string_view ws) const;
@@ -366,7 +384,7 @@ public:
     static const std::string AS_FOREACH, AS_LOCK, AS_UNSAFE, AS_FIXED;
     static const std::string AS_GET, AS_SET, AS_ADD, AS_REMOVE, AS_INIT, AS_RECORD;
     static const std::string AS_REPEAT, AS_GUARD, AS_TRAIT, AS_IMPL, AS_RUST_MOD, AS_OBJECT;
-    static const std::string AS_PROTOCOL, AS_EXTENSION, AS_ACTOR, AS_MIXIN;
+    static const std::string AS_PROTOCOL, AS_EXTENSION, AS_ACTOR, AS_MIXIN, AS_GIVEN;
     static const std::string AS_DELEGATE, AS_UNCHECKED;
     static const std::string AS_CONST_CAST, AS_DYNAMIC_CAST, AS_REINTERPRET_CAST, AS_STATIC_CAST;
     static const std::string AS_NS_DURING, AS_NS_HANDLER;
@@ -431,10 +449,14 @@ protected:  // inline functions
     {
         return baseFileType == DART_TYPE;
     }
-    // Go, Rust, Kotlin, Swift and Dart
+    bool isScalaStyle() const
+    {
+        return baseFileType == SCALA_TYPE;
+    }
+    // Go, Rust, Kotlin, Swift, Dart and Scala
     bool isNewLanguageStyle() const
     {
-        return baseFileType >= GO_TYPE && baseFileType <= DART_TYPE;
+        return baseFileType >= GO_TYPE && baseFileType <= SCALA_TYPE;
     }
     // the languages whose source is masked by ASLexer
     bool isMaskedStyle() const
@@ -501,6 +523,7 @@ public:
     void setKotlinStyle();
     void setSwiftStyle();
     void setDartStyle();
+    void setScalaStyle();
     void setFileType(int type);
     void setJSXMode(bool state);
     [[nodiscard]] bool getJSXMode() const;
@@ -680,6 +703,7 @@ private:  // variables
         int base = 0;                       // indent of the lines of the block
         std::vector<int> indents;
         std::vector<size_t> sizes;
+        bool isInConditional = false;       // the block is in the condition of a header
     };
     std::vector<SavedContinuation> savedContinuations;
 
@@ -762,9 +786,12 @@ private:  // variables
 
     bool attemptLambdaIndentation;
     bool prevLineEndsWithOperator;      // the previous code line ends with a binary operator
+    char prevLineLastChar;              // the last char of the previous code line
+    char prevLineFirstChar;             // the first char of the previous code line
     bool isInRustWhereClause;           // the bounds of a Rust where clause, until the brace
     std::vector<int> angleBlockDepths;  // the angle bracket depth of each generic list spanning lines
     bool isContinuedStatementLine;      // the current line continues the statement of the previous line
+    int  closedParenLineIndent;         // the indent of the line opening a paren closed on the current line
     int  blockContinuationMode;         // -1 = language default, 0 = align, 1 = block
     bool blockContinuation;             // resolved for the current file
 
@@ -945,6 +972,7 @@ public:	// functions
     void setObjCColonPaddingMode(ObjCColonPad mode);
     void setOperatorPaddingMode(bool state);
     void setNegationPaddingMode(NegationPaddingMode mode);
+    void setTypeColonPaddingMode(TypeColonPaddingMode mode);
     void setIncludeDirectivePaddingMode(IncludeDirectivePaddingMode mode);
 
 
@@ -1087,6 +1115,8 @@ private:  // functions
     void padObjCParamType();
     void padObjCReturnType();
     void padOperators(const std::string* newOperator);
+    bool isScalaTypeColon() const;
+    void formatTypeColon();
     void padParensOrBrackets(char openDelim, char closeDelim, bool padFirstParen);
     void processPreprocessor();
     void resetEndOfStatement();
@@ -1175,7 +1205,8 @@ private:  // variables
     std::optional<size_t> currentLineFirstBraceNum;	// first brace location on currentLine
     size_t formattedLineCommentNum;     // comment location on formattedLine
     size_t leadingSpaces;
-    size_t maxCodeLength;
+    size_t maxCodeLength;               // the max code length of the current file
+    size_t optionMaxCodeLength;         // the max code length option
     std::optional<size_t> methodAttachCharNum;
     size_t methodAttachLineNum;
     std::optional<size_t> methodBreakCharNum;
@@ -1202,6 +1233,7 @@ private:  // variables
     ObjCColonPad objCColonPadMode;
     LineEndFormat lineEnd;
     NegationPaddingMode negationPadMode;
+    TypeColonPaddingMode typeColonPadMode;
     IncludeDirectivePaddingMode includeDirectivePaddingMode;
     MaxCodeLengthMode maxCodeLengthMode;
 

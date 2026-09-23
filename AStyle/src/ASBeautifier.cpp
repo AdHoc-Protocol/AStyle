@@ -55,6 +55,7 @@ ASBeautifier::ASBeautifier()
 	setLambdaIndentation(false);
 	setBlockContinuationMode(-1);
 	blockContinuation = false;
+	closedParenLineIndent = -1;
 	setBlockIndent(false);
 	setBraceIndent(false);
 	setBraceIndentVtk(false);
@@ -200,9 +201,12 @@ ASBeautifier::ASBeautifier(const ASBeautifier& other) : ASBase(other)
 
 	attemptLambdaIndentation = other.attemptLambdaIndentation;
 	prevLineEndsWithOperator = other.prevLineEndsWithOperator;
+	prevLineLastChar = other.prevLineLastChar;
+	prevLineFirstChar = other.prevLineFirstChar;
 	isInRustWhereClause = other.isInRustWhereClause;
 	angleBlockDepths = other.angleBlockDepths;
 	isContinuedStatementLine = other.isContinuedStatementLine;
+	closedParenLineIndent = other.closedParenLineIndent;
 	blockContinuationMode = other.blockContinuationMode;
 	blockContinuation = other.blockContinuation;
 	isInAssignment = other.isInAssignment;
@@ -442,8 +446,11 @@ void ASBeautifier::init(ASSourceIterator* iter)
 	lineBraceIndex = 0;
 	savedContinuations.clear();
 	prevLineEndsWithOperator = false;
+	prevLineLastChar = ' ';
+	prevLineFirstChar = ' ';
 	isInRustWhereClause = false;
 	isContinuedStatementLine = false;
+	closedParenLineIndent = -1;
 	angleBlockDepths.clear();
 }
 
@@ -812,7 +819,9 @@ std::string ASBeautifier::beautify(const std::string& originalLine)
 	                            && parenDepth == 0
 	                            && !braceBlockStateStack->empty() && braceBlockStateStack->back()
 	                            && !lineStartsInComment
-	                            && (isLeadingContinuation(line) || (blockContinuation && prevLineEndsWithOperator));
+	                            && (isLeadingContinuation(line) || (blockContinuation && prevLineEndsWithOperator))
+	                            // a line continuing a Scala indentation region is aligned with its statement
+	                            && prevLineLastChar != VIRTUAL_BRACE;
 
 	// the bounds of a Rust where clause are indented, the clause ends at a brace or a semicolon
 	if (isInRustWhereClause && (lineBeginsWithOpenBrace || lineIsCommentOnly || line.empty()))
@@ -821,6 +830,32 @@ std::string ASBeautifier::beautify(const std::string& originalLine)
 		isContinuedStatement = true;
 
 	isContinuedStatementLine = isContinuedStatement && !lineBeginsWithCloseBrace;
+	// a line continuing a Scala indentation region is aligned with the line opening it,
+	// e.g. ".mkString" after ".map: x =>" and its lines
+	if (isScalaStyle() && prevLineLastChar == VIRTUAL_BRACE && !lineStartsInComment
+	        && isLeadingContinuation(line))
+		spaceIndentCount = std::max(spaceIndentCount, prevFinalLineSpaceIndentCount);
+	// the else, catch or finally of a Kotlin or Scala expression is aligned with the brace
+	// before it, e.g. "val x = if (a) {\n  1\n}\nelse {"
+	if ((isKotlinStyle() || isScalaStyle()) && prevLineFirstChar == '}' && prevLineLastChar == '}'
+	        && !isContinuedStatementLine
+	        && parenDepth == 0 && !line.empty() && !std::isblank(static_cast<unsigned char>(line[0]))
+	        && isCharPotentialHeader(line, 0)
+	        && (findKeyword(line, 0, ASResource::AS_ELSE) || findKeyword(line, 0, ASResource::AS_CATCH)
+	            || findKeyword(line, 0, ASResource::AS_FINALLY)
+	            || (isScalaStyle() && (findKeyword(line, 0, "yield") || findKeyword(line, 0, "do")))))
+	{
+		spaceIndentCount = std::min(spaceIndentCount, prevFinalLineSpaceIndentCount);
+		continuationIndentStack->clear();
+		continuationIndentStackSizeStack->clear();
+		if (spaceIndentCount > 0)
+		{
+			continuationIndentStack->emplace_back(spaceIndentCount);
+			continuationIndentStackSizeStack->emplace_back(1);
+		}
+		else
+			continuationIndentStackSizeStack->emplace_back(0);
+	}
 	if (isContinuedStatementLine)
 		spaceIndentCount = std::max(spaceIndentCount, getBlockContinuationBase() + continuationIndent * indentLength);
 	// a method chain in parens or brackets is indented from the element
@@ -829,11 +864,23 @@ std::string ASBeautifier::beautify(const std::string& originalLine)
 		spaceIndentCount += continuationIndent * indentLength;
 
 	// parse characters in the current line.
+	closedParenLineIndent = -1;
 	parseCurrentLine(line);
 
 	if (!lineIsCommentOnly && !lineIsLineCommentOnly && !lineStartsInComment)
 	{
 		prevLineEndsWithOperator = endsWithOperator(line);
+		// the last char of the code, a line comment is not code, the literals are masked
+		size_t codeEnd = isMaskedStyle() ? line.find("//") : std::string::npos;
+		size_t lastChar = line.find_last_not_of(" \t", codeEnd == std::string::npos ? codeEnd : codeEnd - 1);
+		if (codeEnd == 0)
+			lastChar = std::string::npos;
+		prevLineLastChar = lastChar == std::string::npos ? ' ' : line[lastChar];
+		size_t firstChar = line.find_first_not_of(" \t");
+		prevLineFirstChar = firstChar == std::string::npos ? ' ' : line[firstChar];
+		// the line of a closing virtual brace of a Scala indentation region
+		if (line.length() > 1 && line[0] == '}' && line[1] == VIRTUAL_BRACE)
+			prevLineLastChar = VIRTUAL_BRACE;
 		if (isRustStyle())
 		{
 			size_t last = line.find_last_not_of(" \t");
@@ -1007,6 +1054,14 @@ void ASBeautifier::setDartStyle()
 /**
  * set the language by a FileType value.
  */
+/**
+ * set indentation style to Scala.
+ */
+void ASBeautifier::setScalaStyle()
+{
+	fileType = SCALA_TYPE;
+}
+
 void ASBeautifier::setFileType(int type)
 {
 	fileType = type;
@@ -1622,9 +1677,9 @@ void ASBeautifier::registerContinuationIndent(std::string_view line, int i, int 
 		// with the paren, a header condition has at least the minimum conditional indent
 		{
 			int indent = continuationIndent * indentLength;
-			// gofmt and rustfmt indent a continued condition by one indent
+			// gofmt, rustfmt and Scala indent a continued condition by one indent
 			if (isOpener && nextNonWSChar != remainingCharNum && minIndent > indent
-			        && !isGoStyle() && !isRustStyle() && !isSwiftStyle())
+			        && !isGoStyle() && !isRustStyle() && !isSwiftStyle() && !isScalaStyle())
 				indent = minIndent;
 			int currIndent = indent + spaceIndentCount_;
 			// an assignment continues the previous continuation
@@ -2097,6 +2152,9 @@ bool ASBeautifier::endsWithOperator(std::string_view line) const
 	// the parameters of a Kotlin lambda, e.g. "items.forEach { item ->"
 	if (ch == '>' && prev == '-' && isKotlinStyle() && line.find('{') != std::string_view::npos)
 		return false;
+	// the parameters of a Scala lambda or a self type, e.g. "xs.map { x =>"
+	if (ch == '>' && prev == '=' && isScalaStyle() && line.find('{') != std::string_view::npos)
+		return false;
 	// the bounds of a Rust where clause, or of a trait, follow on the next lines
 	if (isRustStyle() && last >= 4 && line.compare(last - 4, 5, "where") == 0
 	        && (last == 4 || !isLegalNameChar(line[last - 5])))
@@ -2217,6 +2275,12 @@ bool ASBeautifier::isLeadingContinuation(std::string_view line) const
 	        && (second == ' ' || second == '\t' || second == '='))
 		return true;
 	if (first == ':' && second != ':' && isInQuestion)
+		return true;
+	// a Scala clause of parameters or a result type, e.g. "(using Context)" or ": Int =",
+	// a statement ending with a paren is terminated by ASLexer
+	if (isScalaStyle()
+	        && ((first == '(' && (prevLineLastChar == ')' || prevLineLastChar == ']' || isLegalNameChar(prevLineLastChar)))
+	            || (first == ':' && (second == ' ' || second == '\t'))))
 		return true;
 	return false;
 }
@@ -2550,9 +2614,21 @@ void ASBeautifier::computePreliminaryIndentation()
 	if (!continuationIndentStack->empty())
 		spaceIndentCount = continuationIndentStack->back();
 
+	size_t blockIndex = 0;      // the index of a block brace in parenDepthStack
 	for (size_t i = 0; i < headerStack->size(); i++)
 	{
 		isInClass = false;
+		// a block in parens is indented after a header without a brace, e.g. "foo(x => {",
+		// not in the condition of the header
+		bool isBlockInParens = false;
+		if ((*headerStack)[i] == &ASResource::AS_OPEN_BRACE)
+		{
+			isBlockInParens = isMaskedStyle() && blockIndex < parenDepthStack->size()
+			                  && (*parenDepthStack)[blockIndex] > 0
+			                  && blockIndex < savedContinuations.size()
+			                  && !savedContinuations[blockIndex].isInConditional;
+			++blockIndex;
+		}
 
 		if (blockIndent)
 		{
@@ -2574,7 +2650,7 @@ void ASBeautifier::computePreliminaryIndentation()
 		{
 			//GL37
 			if (!(i > 0 && (*headerStack)[i - 1] != &ASResource::AS_OPEN_BRACE
-			        && (*headerStack)[i] == &ASResource::AS_OPEN_BRACE)){
+			        && (*headerStack)[i] == &ASResource::AS_OPEN_BRACE && !isBlockInParens)){
 				++indentCount;
 
 					// logIndent(7);
@@ -3163,6 +3239,10 @@ bool ASBeautifier::handleHeaderSection(std::string_view line, size_t* i, bool cl
 	if (newHeader == &ASResource::AS_FOR && isRustStyle() && peekNextChar(line, *i + 2) != '(')
 		newHeader = nullptr;
 
+	// a Kotlin or Scala if in parens is an expression, e.g. "f(if (a) b else c)"
+	if (newHeader != nullptr && (isKotlinStyle() || isScalaStyle()) && parenDepth > 0)
+		newHeader = nullptr;
+
 	// a Swift enum case is not a switch case, a Swift else of a guard is not the else of an if
 	if (newHeader == &ASResource::AS_CASE && isSwiftStyle() && headerStack->size() >= 2
 	        && headerStack->back() == &ASResource::AS_OPEN_BRACE
@@ -3606,6 +3686,7 @@ void ASBeautifier::handleEndOfStatement(size_t i, bool *closingBraceReached, cha
 {
 	isInAssignment = isInInitializerList = false;
 	quoteContinuationIndent = 0;
+	bool isBlockInCondition = false;    // the header of the condition is not ended
 	if (*ch == '}')
 	{
 		// Improved lambda end handling with depth tracking
@@ -3679,6 +3760,11 @@ void ASBeautifier::handleEndOfStatement(size_t i, bool *closingBraceReached, cha
 					*continuationIndentStackSizeStack = std::move(saved.sizes);
 				}
 				closingBraceIndent = saved.base;
+				if (isMaskedStyle())
+				{
+					isInConditional = saved.isInConditional;
+					isBlockInCondition = isInConditional;
+				}
 				savedContinuations.pop_back();
 			}
 		}
@@ -3732,13 +3818,16 @@ void ASBeautifier::handleEndOfStatement(size_t i, bool *closingBraceReached, cha
 		* (such as a previous 'if' for an 'else' header) within the tempStacks,
 		* and recreates the temporary snapshot by manipulating the tempStacks.
 		*/
-	if (!tempStacks->back()->empty())
-		while (!tempStacks->back()->empty())
-			tempStacks->back()->pop_back();
-	while (!headerStack->empty() && headerStack->back() != &ASResource::AS_OPEN_BRACE)
+	if (!isBlockInCondition)
 	{
-		tempStacks->back()->emplace_back(headerStack->back());
-		headerStack->pop_back();
+		if (!tempStacks->back()->empty())
+			while (!tempStacks->back()->empty())
+				tempStacks->back()->pop_back();
+		while (!headerStack->empty() && headerStack->back() != &ASResource::AS_OPEN_BRACE)
+		{
+			tempStacks->back()->emplace_back(headerStack->back());
+			headerStack->pop_back();
+		}
 	}
 
 	if (parenDepth == 0 && *ch == ';')
@@ -3851,6 +3940,16 @@ void ASBeautifier::handleParens(std::string_view line, size_t i, bool tabIncreme
 		         //&& xxxCondition && shouldForceTabIndentation  // only count one opening parentheses per line #498
 		        )
 			registerContinuationIndent(line, i, spaceIndentCount, tabIncrementIn, 0, true);
+		// the next parameter list of a Kotlin or Scala function has the line of the function,
+		// e.g. "def f(\n    a: Int)(\n    using Context"
+		if ((isKotlinStyle() || isScalaStyle()) && parenDepth == 1 && closedParenLineIndent >= 0
+		        && !parenIndentStack->empty() && closedParenLineIndent < parenIndentStack->back())
+		{
+			int shift = parenIndentStack->back() - closedParenLineIndent;
+			parenIndentStack->back() = closedParenLineIndent;
+			if (!continuationIndentStack->empty())
+				continuationIndentStack->back() = std::max(0, continuationIndentStack->back() - shift);
+		}
 	}
 	else if (ch == ')' || ch == ']')
 	{
@@ -3885,8 +3984,11 @@ void ASBeautifier::handleParens(std::string_view line, size_t i, bool tabIncreme
 			{
 				int poppedIndent = parenIndentStack->back();
 				parenIndentStack->pop_back();
+				if (parenDepth == 0 && (closedParenLineIndent < 0 || poppedIndent < closedParenLineIndent))
+					closedParenLineIndent = poppedIndent;
 
-				if (i == 0)
+				// a virtual paren of a Scala condition closed before 'then' beginning the line
+				if (i == 0 || (i == 1 && isScalaStyle() && line[0] == VIRTUAL_PAREN))
 					spaceIndentCount = poppedIndent;
 			}
 		}
@@ -4082,6 +4184,20 @@ void ASBeautifier::handleClosingParen(std::string_view line, size_t i, bool tabI
 			base = std::min(spaceIndentCount, prevFinalLineSpaceIndentCount);
 			spaceIndentCount = base;
 		}
+		// a block after the parameters of a Kotlin or Scala function is indented from the
+		// line of the function, e.g. "def f(\n    a: Int): Int = {"
+		else if ((isKotlinStyle() || isScalaStyle()) && parenDepth == 0 && closedParenLineIndent >= 0
+		         && closedParenLineIndent < base)
+			base = closedParenLineIndent;
+		// the body of a Scala definition is indented from the statement, e.g. after
+		// "(using Context): Int =", a lambda from its line, e.g. ".map: x =>"
+		if (isScalaStyle() && parenDepth == 0 && i > 1 && line[i - 1] == VIRTUAL_BRACE
+		        && getBlockContinuationBase() < base)
+		{
+			size_t opener = line.find_last_not_of(" \t", i - 2);
+			if (opener != std::string::npos && line[opener] == '=')
+				base = getBlockContinuationBase();
+		}
 		saved.base = base;
 		continuationIndentStack->clear();
 		continuationIndentStackSizeStack->clear();
@@ -4123,6 +4239,11 @@ void ASBeautifier::handleClosingParen(std::string_view line, size_t i, bool tabI
 			spaceIndentCount = base;
 	}
 
+	// a block in the condition of a header is indented as a block, the header does not end,
+	// e.g. "if (xs.any { x ->"
+	saved.isInConditional = isInConditional;
+	if (isMaskedStyle())
+		isInConditional = false;
 	savedContinuations.emplace_back(std::move(saved));
 
 	blockTabCount += (isContinuation ? 1 : 0);
@@ -4455,6 +4576,10 @@ void ASBeautifier::parseCurrentLine(std::string_view line)
 		ch = line[i];
 
 		if (isInBeautifySQL)
+			continue;
+
+		// the marker of a virtual brace of a Scala indentation region is not code
+		if (ch == VIRTUAL_BRACE)
 			continue;
 
 		bool isTripleQuoteDelimiter = (isJavaStyle() || isSharpStyle() ) && line.length() > i + 2 && line[i + 1] == '"' && line[i + 2 ] == '"';
@@ -4814,7 +4939,7 @@ void ASBeautifier::parseCurrentLine(std::string_view line)
 		}   // isPotentialHeader
 
 		// a '?' may be a part of a type, or an optional marker
-		if (ch == '?' && !isRustStyle() && !isKotlinStyle()
+		if (ch == '?' && !isRustStyle() && !isKotlinStyle() && !isScalaStyle()
 		        && !(isJSStyle() && std::string_view(":.,)=;").find(peekNextChar(line, i)) != std::string_view::npos)
 		        && !((isSwiftStyle() || isDartStyle()) && std::string_view(".[),>;=").find(peekNextChar(line, i)) != std::string_view::npos))
 			isInQuestion = true;

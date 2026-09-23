@@ -9,7 +9,7 @@ image:https://img.shields.io/github/v/release/AdHoc-Protocol/AStyle?label=downlo
 image:https://img.shields.io/badge/license-MIT-blue[MIT License,link=AStyle/LICENSE.md]
 
 *One formatter for a polyglot codebase.* Artistic Style, the classic C/C++/C#/Java formatter, extended with
-*TypeScript, JSX, Go, Rust, Kotlin, Swift and Dart*, and formatting every language the way its own community
+*TypeScript, JSX, Go, Rust, Kotlin, Swift, Dart and Scala*, and formatting every language the way its own community
 formatter does. A single native executable without dependencies, for Linux, Windows and macOS, and a WebAssembly build.
 
 [.text-center]
@@ -39,6 +39,7 @@ toc::[]
 |Kotlin |`kotlin` |`.kt .kts` |ktlint
 |Swift |`swift` |`.swift` |swift-format
 |Dart |`dart` |`.dart` |dart format
+|Scala 2, Scala 3 |`scala` |`.scala .sc .sbt` |IntelliJ Scala plugin
 |===
 
 The language comes from the file suffix, also for `--stdin=`, or from `--mode=`.
@@ -245,9 +246,14 @@ Compared to Artistic Style 3.6.19:
 
 * *A lexer pass* (`AStyle/src/ASLexer.cpp`) protects every literal: template literals, regular expressions, JSX, raw,
   verbatim and interpolated strings, text blocks, Rust lifetimes, multi-line strings. It recognizes the statements
-  ended by a line break (JavaScript, TypeScript, Go, Kotlin, Swift) and the conditions without parens (Go, Rust, Swift).
-* *The new languages*: TypeScript/TSX, JSX, Go, Rust, Kotlin, Swift and Dart, with the modes `ts`, `tsx`, `jsx`, `go`,
-  `rust`, `kotlin`, `swift`, `dart`.
+  ended by a line break (JavaScript, TypeScript, Go, Kotlin, Swift, Scala) and the conditions without parens (Go, Rust,
+  Swift, Scala).
+* *The new languages*: TypeScript/TSX, JSX, Go, Rust, Kotlin, Swift, Dart and Scala, with the modes `ts`, `tsx`,
+  `jsx`, `go`, `rust`, `kotlin`, `swift`, `dart`, `scala`.
+* *Scala 3 significant indentation*: the indentation regions of Scala 3 (`if ... then`, `match`, `def f =`, `object A:`,
+  `xs.map: x =>`, `end` markers) are indented like blocks, re-indenting keeps the meaning of the code. Scala 2 code with
+  braces is formatted as always. `--pad-type-colon=after|all|none` sets the spaces around a type colon, as the
+  IntelliJ Scala plugin does.
 * *`--block-continuation` / `--align-continuation`*: continuation lines one indent from the statement, as Prettier and
   gofmt do (the default for JavaScript, TypeScript and the new languages), or aligned with a paren or an assignment.
 * *C#*: switch expressions, records, `with` and `new` initializers, one-line auto-properties and accessors, raw strings.

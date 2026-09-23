@@ -775,7 +775,7 @@
 			h: 'cpp', hpp: 'cpp', hh: 'cpp', hxx: 'cpp', cc: 'cpp', cxx: 'cpp', cpp: 'cpp', 'c++': 'cpp', ino: 'cpp',
 			c: 'c', m: 'objc', mm: 'objc', cs: 'cs', java: 'java', js: 'js', mjs: 'js', cjs: 'js', jsx: 'jsx',
 			ts: 'ts', mts: 'ts', cts: 'ts', tsx: 'tsx', go: 'go', rs: 'rust', kt: 'kotlin', kts: 'kotlin',
-			swift: 'swift', dart: 'dart',
+			swift: 'swift', dart: 'dart', scala: 'scala', sc: 'scala', sbt: 'scala',
 		};
 		return map[ext] || null;
 	}

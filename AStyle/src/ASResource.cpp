@@ -75,6 +75,7 @@ const std::string ASResource::AS_PROTOCOL = std::string("protocol");
 const std::string ASResource::AS_EXTENSION = std::string("extension");
 const std::string ASResource::AS_ACTOR = std::string("actor");
 const std::string ASResource::AS_MIXIN = std::string("mixin");
+const std::string ASResource::AS_GIVEN = std::string("given");
 const std::string ASResource::AS_SEALED = std::string("sealed");
 const std::string ASResource::AS_SELECTOR = std::string("selector");
 const std::string ASResource::AS_SET = std::string("set");
@@ -306,7 +307,7 @@ void ASResource::buildHeaders(std::vector<const std::string*>* headers, int file
 	headers->reserve(elements);
 
 	// the new languages have only their own statement headers
-	if (fileType >= GO_TYPE && fileType <= DART_TYPE)
+	if (fileType >= GO_TYPE && fileType <= SCALA_TYPE)
 	{
 		headers->emplace_back(&AS_IF);
 		headers->emplace_back(&AS_ELSE);
@@ -324,11 +325,15 @@ void ASResource::buildHeaders(std::vector<const std::string*>* headers, int file
 			headers->emplace_back(&AS_DO);
 			headers->emplace_back(&AS_CATCH);
 		}
-		if (fileType == KOTLIN_TYPE || fileType == DART_TYPE)
+		if (fileType == KOTLIN_TYPE || fileType == DART_TYPE || fileType == SCALA_TYPE)
 		{
 			headers->emplace_back(&AS_TRY);
 			headers->emplace_back(&AS_FINALLY);
 		}
+		// Scala: 'match' and 'case' are not statement headers, the case clauses are
+		// indented in the match block as IntelliJ does
+		if (fileType == SCALA_TYPE)
+			headers->emplace_back(&AS_CATCH);
 		if (fileType == SWIFT_TYPE)
 		{
 			headers->emplace_back(&AS_REPEAT);
@@ -491,7 +496,7 @@ void ASResource::buildNonParenHeaders(std::vector<const std::string*>* nonParenH
 	nonParenHeaders->reserve(elements);
 
 	// the new languages have only their own statement headers
-	if (fileType >= GO_TYPE && fileType <= DART_TYPE)
+	if (fileType >= GO_TYPE && fileType <= SCALA_TYPE)
 	{
 		nonParenHeaders->emplace_back(&AS_ELSE);
 		if (fileType == GO_TYPE || fileType == SWIFT_TYPE || fileType == DART_TYPE)
@@ -504,11 +509,13 @@ void ASResource::buildNonParenHeaders(std::vector<const std::string*>* nonParenH
 			nonParenHeaders->emplace_back(&AS_DO);
 			nonParenHeaders->emplace_back(&AS_CATCH);
 		}
-		if (fileType == KOTLIN_TYPE || fileType == DART_TYPE)
+		if (fileType == KOTLIN_TYPE || fileType == DART_TYPE || fileType == SCALA_TYPE)
 		{
 			nonParenHeaders->emplace_back(&AS_TRY);
 			nonParenHeaders->emplace_back(&AS_FINALLY);
 		}
+		if (fileType == SCALA_TYPE)
+			nonParenHeaders->emplace_back(&AS_CATCH);
 		if (fileType == SWIFT_TYPE)
 			nonParenHeaders->emplace_back(&AS_REPEAT);
 		sort(nonParenHeaders->begin(), nonParenHeaders->end(), sortOnName);
@@ -664,6 +671,12 @@ void ASResource::buildOperators(std::vector<const std::string*>* operators, int 
 		operators->emplace_back(&AS_ELVIS);
 		operators->emplace_back(&AS_NOT_NOT);
 	}
+	// Scala: the generator arrow "x <- xs" is not a comparison with a negative value
+	if (fileType == SCALA_TYPE)
+	{
+		operators->emplace_back(&AS_CHANNEL);
+		operators->emplace_back(&AS_COLON_ASSIGN);
+	}
 	if (fileType == GO_TYPE)
 	{
 		operators->emplace_back(&AS_COLON_ASSIGN);
@@ -735,6 +748,13 @@ void ASResource::buildPreBlockStatements(std::vector<const std::string*>* preBlo
 	{
 		preBlockStatements->emplace_back(&AS_INTERFACE);
 		preBlockStatements->emplace_back(&AS_OBJECT);
+	}
+	if (fileType == SCALA_TYPE)
+	{
+		preBlockStatements->emplace_back(&AS_TRAIT);
+		preBlockStatements->emplace_back(&AS_OBJECT);
+		preBlockStatements->emplace_back(&AS_EXTENSION);
+		preBlockStatements->emplace_back(&AS_GIVEN);
 	}
 	if (fileType == SWIFT_TYPE)
 	{
@@ -851,6 +871,13 @@ void ASResource::buildPreDefinitionHeaders(std::vector<const std::string*>* preD
 		preDefinitionHeaders->emplace_back(&AS_INTERFACE);
 		preDefinitionHeaders->emplace_back(&AS_OBJECT);
 	}
+	if (fileType == SCALA_TYPE)
+	{
+		preDefinitionHeaders->emplace_back(&AS_TRAIT);
+		preDefinitionHeaders->emplace_back(&AS_OBJECT);
+		preDefinitionHeaders->emplace_back(&AS_EXTENSION);
+		preDefinitionHeaders->emplace_back(&AS_GIVEN);
+	}
 	if (fileType == SWIFT_TYPE)
 	{
 		preDefinitionHeaders->emplace_back(&AS_STRUCT);
@@ -896,6 +923,14 @@ const std::string* ASBase::findHeader(std::string_view line, int i,
 			return header;
 		if (isLegalNameChar(line[wordEnd]))
 			continue;
+		// the keyword of a Scala end marker is not a header, e.g. "end if"
+		if (isScalaStyle() && i >= 4)
+		{
+			size_t prev = line.find_last_not_of(" \t", i - 1);
+			if (prev != std::string_view::npos && prev >= 2 && line.compare(prev - 2, 3, "end") == 0
+			        && (prev == 2 || !isLegalNameChar(line[prev - 3])))
+				break;
+		}
 		const char peekChar = peekNextChar(line, wordEnd - 1);
 		// is not a header if part of a definition
 		if (peekChar == ',' || peekChar == ')')

@@ -19,6 +19,7 @@
 		kotlin: common + ' abstract as class companion const constructor data enum external fun get import in init inline interface internal is lateinit object open operator out override package private protected public sealed set super suspend typealias val var vararg when where by val Int String Boolean Unit Nothing Any',
 		swift: common + ' as associatedtype await async class deinit enum extension fallthrough fileprivate final func guard import in init inout internal is let nil open operator private protocol public repeat rethrows self Self static struct subscript super throws typealias var weak where actor some any lazy mutating override private(set) Int Double String Bool Void',
 		dart: common + ' abstract as assert async await class const covariant deferred dynamic enum export extends extension external factory final get hide implements import in interface is late library mixin null on operator part required rethrow sealed set show static super sync typedef var void with yield int double String bool num List Map Future',
+		scala: 'abstract case catch class def derives do else end enum export extends extension false final finally for forSome given if implicit import infix inline lazy match new null object opaque open override package private protected return sealed super then this throw trait transparent true try type using val var while with yield',
 	};
 	keywords.jsx = keywords.js;
 	keywords.tsx = keywords.ts;

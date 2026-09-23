@@ -43,6 +43,7 @@ ASFormatter::ASFormatter()
     lineEnd = LINEEND_DEFAULT;
     squeezeEmptyLineNum = std::string::npos;
     maxCodeLength = std::string::npos;
+    optionMaxCodeLength = std::string::npos;
     maxCodeLengthMode = MAXCODELENGTH_CODE,
     shouldIgnoreSideCommentLengths = false;
     isInStruct = false;
@@ -51,6 +52,7 @@ ASFormatter::ASFormatter()
     shouldPadCommas = false;
     shouldPadOperators = false;
     negationPadMode = NEGATION_PAD_NO_CHANGE;
+    typeColonPadMode = TYPE_COLON_PAD_NO_CHANGE;
     includeDirectivePaddingMode = INCLUDE_PAD_NO_CHANGE;
     shouldPadParensOutside = false;
     shouldPadFirstParen = false;
@@ -140,6 +142,8 @@ void ASFormatter::init(ASSourceIterator* si)
     buildLanguageVectors();
     fixOptionVariableConflicts();
     ASBeautifier::init(si);
+    // Scala lines are not broken, a line break may end a statement or an indentation region
+    maxCodeLength = isScalaStyle() ? std::string::npos : optionMaxCodeLength;
     sourceIterator = si;
 
     enhancer->init(getFileType(),
@@ -490,8 +494,10 @@ void ASFormatter::fixOptionVariableConflicts()
 bool ASFormatter::handleImmediatelyPostHeaderSection()
 {
     // should braces be added
+    // not in Scala, a block may be an indentation region of Scala 3
     if (currentChar != '{'
             && shouldAddBraces
+            && !isScalaStyle()
             && currentChar != '#'	// don't add to preprocessor
             && (shouldBreakOneLineStatements || !isHeaderInMultiStatementLine)
             && isOkToBreakBlock(braceTypeStack->back()))
@@ -506,7 +512,7 @@ bool ASFormatter::handleImmediatelyPostHeaderSection()
         }
     }
     // should braces be removed
-    else if (currentChar == '{' && shouldRemoveBraces)
+    else if (currentChar == '{' && shouldRemoveBraces && !isScalaStyle())
     {
         bool bracesRemoved = removeBracesFromStatement();
         if (bracesRemoved)
@@ -1020,8 +1026,8 @@ BraceType ASFormatter::getNewLanguageBraceType() const
         return BraceType::COMMAND_TYPE;
     if (currentHeader != nullptr && isNonParenHeader)
         return BraceType::COMMAND_TYPE;
-    // in Kotlin and Swift a brace is a block, a lambda, or a closure
-    if (isKotlinStyle() || isSwiftStyle())
+    // in Kotlin, Swift and Scala a brace is a block, a lambda, or a closure
+    if (isKotlinStyle() || isSwiftStyle() || isScalaStyle())
         return BraceType::COMMAND_TYPE;
     // a composite literal of a type literal, e.g. "struct{}{}"
     if (isGoStyle() && prev == '}' && previousChar == '}')
@@ -1158,9 +1164,11 @@ void ASFormatter::handleBreakLine()
         else
             isInLineBreak = true;
     }
+    // a Scala expression continues after a block, e.g. "} yield x" or "} filter { ... }"
     else if (isCharImmediatelyPostCloseBlock
              && shouldBreakOneLineStatements
              && !isCharImmediatelyPostComment
+             && !isScalaStyle()
              && ((isLegalNameChar(currentChar) && currentChar != '.')
                  || currentChar == '+'
                  || currentChar == '-'
@@ -2534,6 +2542,14 @@ std::string ASFormatter::nextLine()
             continue;
         }
 
+        // a Scala type colon, e.g. "x: Int"
+        if (currentChar == ':' && typeColonPadMode != TYPE_COLON_PAD_NO_CHANGE && isScalaStyle()
+                && isScalaTypeColon())
+        {
+            formatTypeColon();
+            continue;
+        }
+
         if ((shouldPadOperators || negationPadMode != NEGATION_PAD_NO_CHANGE) && newHeader != nullptr && !isOperatorPaddingDisabled())
         {
             padOperators(newHeader);
@@ -2896,6 +2912,7 @@ void ASFormatter::setPreserveBraceFormat(bool state)
 void ASFormatter::setMaxCodeLength(int max)
 {
     maxCodeLength = max;
+    optionMaxCodeLength = max;
 }
 
 
@@ -2943,6 +2960,14 @@ void ASFormatter::setOperatorPaddingMode(bool state)
 void ASFormatter::setNegationPaddingMode(NegationPaddingMode mode)
 {
     negationPadMode = mode;
+}
+
+/**
+ * set the space padding of a Scala type colon, e.g. "x: Int"
+ */
+void ASFormatter::setTypeColonPaddingMode(TypeColonPaddingMode mode)
+{
+    typeColonPadMode = mode;
 }
 
 /**
@@ -4048,10 +4073,10 @@ BraceType ASFormatter::getBraceType()
             returnVal = returnVal | BraceType::BREAK_BLOCK_TYPE;
         if (foundOneLineBlock == 3)
             returnVal = returnVal | BraceType::EMPTY_BLOCK_TYPE;
-        // Go one-line blocks are kept, as gofmt does, and the Kotlin and Swift
-        // lambdas and closures, e.g. ".map { it * 2 }"
+        // Go one-line blocks are kept, as gofmt does, and the Kotlin, Swift and
+        // Scala lambdas and closures, e.g. ".map { it * 2 }" or ".map { x => x * 2 }"
         else if (foundOneLineBlock == 1 && !breakCurrentOneLineBlock
-                 && (isGoStyle() || isKotlinStyle() || isSwiftStyle()))
+                 && (isGoStyle() || isKotlinStyle() || isSwiftStyle() || isScalaStyle()))
             returnVal = returnVal | BraceType::KEEP_ONE_LINE_TYPE;
         // a Rust block in an expression, e.g. "if c { a } else { b }" as a value,
         // or a Dart closure in the arguments of a call
@@ -4160,7 +4185,7 @@ bool ASFormatter::isPointerOrReference() const
     assert(currentChar == '*' || currentChar == '&' || currentChar == '^');
 
     // these languages do not have pointers
-    if (isJavaStyle() || isJSStyle() || isKotlinStyle() || isSwiftStyle() || isDartStyle())
+    if (isJavaStyle() || isJSStyle() || isKotlinStyle() || isSwiftStyle() || isDartStyle() || isScalaStyle())
         return false;
 
     if (isCharImmediatelyPostOperator)
@@ -4836,7 +4861,7 @@ bool ASFormatter::isSharpSimpleAccessorBlock() const
 bool ASFormatter::isTernaryQuestion() const
 {
     assert(currentChar == '?');
-    if (isRustStyle() || isKotlinStyle())
+    if (isRustStyle() || isKotlinStyle() || isScalaStyle())
         return false;
     char next = peekNextChar();
     if (isJSStyle())
@@ -4891,8 +4916,15 @@ bool ASFormatter::isGeneratorStar() const
  */
 bool ASFormatter::isLambdaSignatureFollows() const
 {
-    if (!isKotlinStyle() && !isSwiftStyle())
+    if (!isKotlinStyle() && !isSwiftStyle() && !isScalaStyle())
         return false;
+    // Scala keeps any code after the brace, e.g. "{ x =>" or "&& { this match"
+    if (isScalaStyle())
+    {
+        size_t next = currentLine.find_first_not_of(" \t", charNum + 1);
+        return next != std::string::npos && currentLine.compare(next, 2, "//") != 0
+               && currentLine.compare(next, 2, "/*") != 0;
+    }
     int depth = 0;
     for (size_t i = charNum + 1; i < currentLine.length(); i++)
     {
@@ -5400,6 +5432,8 @@ void ASFormatter::padOperators(const std::string* newOperator)
                  && currentLine.find(':', charNum + 1) == std::string::npos)
             // a TypeScript optional marker, e.g. "a?: T", is not padded
             && !(newOperator == &ASResource::AS_COLON && isJSStyle() && previousNonWSChar == '?' && previousChar == '?')
+            // a Scala colon is not padded before, e.g. "enum Color:" or "x: Int"
+            && !(newOperator == &ASResource::AS_COLON && isScalaStyle())
        )
     {
         appendSpacePad();
@@ -5423,6 +5457,88 @@ void ASFormatter::padOperators(const std::string* newOperator)
        )
     {
         appendSpaceAfter();
+    }
+}
+
+// the chars of a Scala operator identifier, e.g. "+-" or "::"
+constexpr std::string_view SCALA_OPERATOR_CHARS = "!#%&*+-/:<=>?\\^|~";
+
+/**
+ * Check if the current colon is a Scala type colon, e.g. in "x: Int", "[T: Ordering]"
+ * or "case x: Int =>". It is not an operator, e.g. "::" or "+:", not the colon of a
+ * template or an argument at the end of the line, e.g. "object A:", and not the colon
+ * of a lambda argument, e.g. "xs.map: x =>", its padding would change the meaning.
+ */
+bool ASFormatter::isScalaTypeColon() const
+{
+    assert(currentChar == ':');
+    if (charNum > 0 && SCALA_OPERATOR_CHARS.find(currentLine[charNum - 1]) != std::string_view::npos)
+        return false;
+    if (charNum + 1 < (int) currentLine.length()
+            && SCALA_OPERATOR_CHARS.find(currentLine[charNum + 1]) != std::string_view::npos)
+        return false;
+    // the code after the colon, a colon ending the line opens a region
+    size_t next = currentLine.find_first_not_of(" \t", charNum + 1);
+    if (next == std::string::npos || currentLine[next] == VIRTUAL_BRACE
+            || currentLine.compare(next, 2, "//") == 0 || currentLine.compare(next, 2, "/*") == 0)
+        return false;
+    // a lambda argument is followed by its parameters and an arrow ending the line,
+    // e.g. "xs.map: x =>" or "xs.foreach: (a, b) =>"
+    int depth = 0;
+    for (size_t i = next; i < currentLine.length(); i++)
+    {
+        char ch = currentLine[i];
+        if (ch == '(' || ch == '[')
+            ++depth;
+        else if ((ch == ')' || ch == ']') && --depth < 0)
+            return true;
+        else if (ch == '{' || ch == '}' || ch == '"' || currentLine.compare(i, 2, "//") == 0)
+            return true;
+        else if (depth == 0 && currentLine.compare(i, 2, "=>") == 0)
+        {
+            size_t after = currentLine.find_first_not_of(" \t", i + 2);
+            return !(after == std::string::npos || currentLine[after] == VIRTUAL_BRACE
+                     || currentLine.compare(after, 2, "//") == 0);
+        }
+        else if (depth == 0 && (ch == '=' || ch == ':'))
+            return true;
+    }
+    return true;
+}
+
+/**
+ * Pad a Scala type colon, e.g. "x: Int". A space is kept between the colon and
+ * an operator identifier, e.g. "val +- : Int", the chars would be one operator.
+ */
+void ASFormatter::formatTypeColon()
+{
+    assert(currentChar == ':');
+    // the spaces before the colon
+    size_t lastText = formattedLine.find_last_not_of(" \t");
+    if (lastText != std::string::npos)
+    {
+        bool isAfterOperator = SCALA_OPERATOR_CHARS.find(formattedLine[lastText]) != std::string_view::npos;
+        size_t spaces = formattedLine.length() - (lastText + 1);
+        size_t wanted = (typeColonPadMode == TYPE_COLON_PAD_ALL || isAfterOperator) ? 1 : 0;
+        if (spaces != wanted)
+        {
+            formattedLine.resize(lastText + 1);
+            formattedLine.append(wanted, ' ');
+            spacePadNum += (int) wanted - (int) spaces;
+        }
+    }
+    appendCurrentChar();
+    // the spaces after the colon
+    size_t next = currentLine.find_first_not_of(" \t", charNum + 1);
+    if (next == std::string::npos)
+        return;
+    size_t spaces = next - (charNum + 1);
+    bool isBeforeOperator = SCALA_OPERATOR_CHARS.find(currentLine[next]) != std::string_view::npos;
+    size_t wanted = (typeColonPadMode == TYPE_COLON_PAD_NONE && !isBeforeOperator) ? 0 : 1;
+    if (spaces != wanted)
+    {
+        currentLine.replace(charNum + 1, spaces, wanted, ' ');
+        spacePadNum += (int) wanted - (int) spaces;
     }
 }
 
@@ -6277,7 +6393,12 @@ void ASFormatter::formatOpeningBrace(BraceType braceType)
 
     parenStack->emplace_back(0);
 
-    if (shouldPreserveBraceFormat)
+    // a virtual brace of a Scala indentation region stays where it is,
+    // a Kotlin or Scala brace directly after a paren or dot stays attached, e.g. "({ x -> x })"
+    // or "import a.{B, C}"
+    if (shouldPreserveBraceFormat || (charNum > 0 && currentLine[charNum - 1] == VIRTUAL_BRACE)
+            || ((isKotlinStyle() || isScalaStyle()) && !formattedLine.empty()
+                && (formattedLine.back() == '(' || formattedLine.back() == '[' || formattedLine.back() == '.')))
     {
         appendCurrentChar();
         return;
@@ -6426,7 +6547,9 @@ void ASFormatter::formatClosingBrace(BraceType braceType)
     if (parenStack->size() > 1)
         parenStack->pop_back();
 
-    if (shouldPreserveBraceFormat)
+    // a virtual brace of a Scala indentation region stays where it is, "}" and the marker
+    if (shouldPreserveBraceFormat
+            || (charNum + 1 < static_cast<int>(currentLine.length()) && currentLine[charNum + 1] == VIRTUAL_BRACE))
     {
         appendCurrentChar();
         return;

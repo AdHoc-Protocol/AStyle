@@ -27,7 +27,6 @@ constexpr char APOSTROPHE_SUB   = '\x1C';   // Rust lifetime or loop label apost
 constexpr char HASH_SUB         = '\x1D';   // '#' that is not a preprocessor directive
 constexpr char SLASH_SUB        = '\x1E';   // '/' of a nested comment delimiter
 constexpr char VIRTUAL_TERMINATOR = '\x1F'; // precedes an inserted statement terminator ';'
-constexpr char VIRTUAL_PAREN = '\x16';      // follows an inserted '(' and precedes an inserted ')'
 
 constexpr size_t npos = std::string::npos;
 
@@ -371,7 +370,8 @@ private:
 
 	bool isNestedCommentLanguage() const
 	{
-		return type() == RUST_TYPE || type() == KOTLIN_TYPE || type() == SWIFT_TYPE || type() == DART_TYPE;
+		return type() == RUST_TYPE || type() == KOTLIN_TYPE || type() == SWIFT_TYPE || type() == DART_TYPE
+		       || type() == SCALA_TYPE;
 	}
 
 	bool at(size_t i, std::string_view seq) const
@@ -500,8 +500,8 @@ private:
 				continue;
 			}
 
-			// a Rust lifetime or loop label
-			if (ch == '\'' && type() == RUST_TYPE)
+			// a Rust lifetime or loop label, a Scala symbol or quote, e.g. 'sym or '{ expr }
+			if (ch == '\'' && (type() == RUST_TYPE || type() == SCALA_TYPE))
 			{
 				if (emit)
 					out += APOSTROPHE_SUB;
@@ -592,7 +592,7 @@ private:
 
 	bool mapsHash() const
 	{
-		return isJS() || type() == RUST_TYPE || type() == SWIFT_TYPE;
+		return isJS() || type() == RUST_TYPE || type() == SWIFT_TYPE || type() == SCALA_TYPE;
 	}
 
 	size_t scanBlockComment(size_t i, bool emit)
@@ -716,6 +716,8 @@ private:
 				return scanRustLiteral(i);
 			case KOTLIN_TYPE:
 				return scanKotlinLiteral(i);
+			case SCALA_TYPE:
+				return scanScalaLiteral(i);
 			case SWIFT_TYPE:
 				return scanSwiftLiteral(i, shiftable);
 			case DART_TYPE:
@@ -1274,6 +1276,60 @@ private:
 		return scanQuoted(i, '"', true, false, "${", '}');
 	}
 
+	// Scala strings, interpolated strings with any interpolator (s"...", f"...",
+	// sql"""..."""), multi-line strings, char literals and quoted identifiers
+	size_t scanScalaLiteral(size_t i)
+	{
+		char ch = src[i];
+		if (ch == '\'')
+			return scanRustChar(i);         // 'a' or '\n', not a symbol 'sym
+		if (ch == '\x60')
+			return scanQuoted(i, '\x60', false, false);
+		// an interpolator is an identifier directly before the quote
+		size_t j = i;
+		if (isIdentStart(ch))
+		{
+			while (j < len && isIdentChar(src[j]) && src[j] != '$')
+				++j;
+		}
+		if (charAt(j) != '"')
+			return npos;
+		bool interpolated = j > i;
+		if (at(j, "\"\"\""))
+		{
+			// no escapes; ends at the last quote of a run of three or more
+			size_t k = j + 3;
+			while (k < len)
+			{
+				if (src[k] == '"')
+				{
+					size_t run = countRun(k, '"');
+					if (run >= 3)
+						return k + run;
+					k += run;
+					continue;
+				}
+				if (interpolated && src[k] == '$')
+				{
+					if (charAt(k + 1) == '{')
+					{
+						k = scanHole(k + 2, '}');
+						if (k == npos)
+							return npos;
+						continue;
+					}
+					k += 2;                 // $$ or $name
+					continue;
+				}
+				++k;
+			}
+			return npos;
+		}
+		if (interpolated)
+			return scanQuoted(j, '"', true, false, "${", '}');
+		return scanQuoted(j, '"', true, false);
+	}
+
 	// Swift strings, multi-line strings, raw strings and quoted identifiers
 	size_t scanSwiftLiteral(size_t i, bool& shiftable)
 	{
@@ -1384,6 +1440,7 @@ public:
 
 	std::string run();
 	std::string insertHeaderParens();
+	std::string insertIndentRegions();
 
 private:
 	enum class Kind { Word, Number, Literal, Punct, Open, Close };
@@ -1710,6 +1767,14 @@ bool ASLexer::Terminator::isContinuationEnd(const Line& line) const
 			"else", "do", "in", "is", "as", "by", "where", "val", "var", "fun", "class",
 			"interface", "object", "import", "package", "throw"
 		};
+		static const std::string_view scalaWords[] =
+		{
+			"else", "then", "do", "yield", "match", "with", "extends", "derives", "new", "if",
+			"while", "for", "try", "catch", "finally", "val", "var", "def", "class", "object",
+			"trait", "enum", "case", "given", "using", "implicit", "lazy", "override", "private",
+			"protected", "sealed", "abstract", "final", "type", "extension", "import", "export",
+			"package", "throw", "forSome", "inline", "transparent", "opaque", "open"
+		};
 		static const std::string_view swiftWords[] =
 		{
 			"else", "in", "is", "as", "where", "let", "var", "func", "class", "struct",
@@ -1723,6 +1788,13 @@ bool ASLexer::Terminator::isContinuationEnd(const Line& line) const
 			return std::find(std::begin(kotlinWords), std::end(kotlinWords), word) != std::end(kotlinWords);
 		if (type() == SWIFT_TYPE)
 			return std::find(std::begin(swiftWords), std::end(swiftWords), word) != std::end(swiftWords);
+		if (type() == SCALA_TYPE)
+		{
+			// an end marker ends the statement, e.g. "end if"
+			if (line.size() == 2 && line[0].kind == Kind::Word && line[0].text == "end")
+				return false;
+			return std::find(std::begin(scalaWords), std::end(scalaWords), word) != std::end(scalaWords);
+		}
 		return false;
 	}
 	if (last.kind != Kind::Punct)
@@ -1731,6 +1803,18 @@ bool ASLexer::Terminator::isContinuationEnd(const Line& line) const
 	const std::string& op = last.text;
 	if (op == ";" || op == "," || op == ".")
 		return true;
+	// Scala: a symbolic identifier is an operand after an assignment, an arrow, or
+	// at the start of an argument, e.g. "def f: Int = ???"
+	if (type() == SCALA_TYPE && op != "=" && op != "=>" && op != ":")
+	{
+		// a wildcard import, e.g. "import a.*"
+		if (line.size() == 1 || (op.size() > 1 && op[0] == '.'))
+			return false;
+		const Token& before = line[line.size() - 2];
+		if (before.kind == Kind::Open
+		        || (before.kind == Kind::Punct && (before.text == "=" || before.text == "=>" || before.text == "," || before.text == ".")))
+			return false;
+	}
 	if (op == "++" || op == "--" || op == "!" || op == "!!")
 		return false;
 	// a '?' attached to a type is an optional type
@@ -1767,6 +1851,52 @@ bool ASLexer::Terminator::isContinuationStart(const Token& next, const Token& la
 	{
 		if (next.text == "{")
 			return true;
+		// a Scala clause of parameters indented more than the definition continues it,
+		// e.g. "(using Context)" or "(p: Symbol => Boolean)"
+		// or a name, e.g. "def f\n    (a: Int)"
+		if (type() == SCALA_TYPE && next.text == "(" && (last.text == ")" || last.text == "]"
+		        || last.kind == Kind::Word))
+		{
+			auto indentOf = [&](size_t at) -> size_t
+			{
+				size_t start = src.find_last_of("\r\n", at);
+				start = (start == npos) ? 0 : start + 1;
+				return src.find_first_not_of(" \t", start) - start;
+			};
+			// the line of the opening paren of the clause before, it may begin with a clause too
+			auto openOf = [&](size_t close) -> size_t
+			{
+				int depth = 0;
+				for (size_t k = close + 1; k-- > 0;)
+				{
+					if (src[k] == ')' || src[k] == ']')
+						++depth;
+					else if ((src[k] == '(' || src[k] == '[') && --depth == 0)
+						return k;
+				}
+				return npos;
+			};
+			size_t open = last.kind == Kind::Word ? last.start : openOf(last.start);
+			while (open != npos)
+			{
+				size_t first = src.find_last_of("\r\n", open);
+				first = src.find_first_not_of(" \t", first == npos ? 0 : first + 1);
+				if (first != open || first == 0)
+					break;
+				size_t before = src.find_last_not_of(" \t\r\n", first - 1);
+				if (before == npos)
+					break;
+				// the clause follows the name of the definition, e.g. "def f\n    (a: Int)"
+				if (src[before] != ')' && src[before] != ']')
+				{
+					if (isIdentChar(src[before]))
+						open = before;
+					break;
+				}
+				open = openOf(before);
+			}
+			return open != npos && indentOf(next.start) > indentOf(open);
+		}
 		// in JavaScript a line starting with a paren or a bracket continues the statement
 		return isJS();
 	}
@@ -1787,10 +1917,16 @@ bool ASLexer::Terminator::isContinuationStart(const Token& next, const Token& la
 				return true;
 			return type() == SWIFT_TYPE;
 		}
-		if (word == "while" && last.kind == Kind::Close && last.text == "}")
+		// the while of a do loop, Scala 3 has no do loop
+		if (word == "while" && last.kind == Kind::Close && last.text == "}" && type() != SCALA_TYPE)
 			return true;
 		// a Kotlin property accessor on the line after the property
 		if (type() == KOTLIN_TYPE && (word == "get" || word == "set"))
+			return true;
+		// Scala: these keywords continue the expression of the previous line
+		if (type() == SCALA_TYPE
+		        && (word == "with" || word == "derives" || word == "then" || word == "do"
+		            || word == "yield" || word == "match" || word == "forSome"))
 			return true;
 		return false;
 	}
@@ -1807,8 +1943,8 @@ bool ASLexer::Terminator::isContinuationStart(const Token& next, const Token& la
 		return false;
 	if (type() == KOTLIN_TYPE)
 		return false;
-	// Swift binary operators are separated by spaces, prefix operators are not
-	if (type() == SWIFT_TYPE)
+	// Swift binary operators and Scala 3 leading infix operators are followed by a space
+	if (type() == SWIFT_TYPE || type() == SCALA_TYPE)
 		return next.end < len && (src[next.end] == ' ' || src[next.end] == '\t');
 	return isJS();
 }
@@ -1871,6 +2007,9 @@ std::string ASLexer::Terminator::insertHeaderParens()
 		const Token* prev = t > 0 ? tokens[t - 1] : nullptr;
 		if (prev != nullptr && prev->kind == Kind::Punct && prev->text == ".")
 			continue;
+		// the keyword of a Scala end marker, e.g. "end if"
+		if (prev != nullptr && prev->kind == Kind::Word && prev->text == "end" && type() == SCALA_TYPE)
+			continue;
 
 		bool isHeader = false;
 		bool isGuard = false;
@@ -1896,11 +2035,125 @@ std::string ASLexer::Terminator::insertHeaderParens()
 			case KOTLIN_TYPE:
 				isHeader = (word == "when");
 				break;
+			case SCALA_TYPE:
+				isHeader = (word == "if" || word == "while" || word == "for");
+				break;
 			default:
 				break;
 		}
 		if (!isHeader || t + 1 >= tokens.size())
 			continue;
+
+		// Scala 3: the condition ends with 'then', 'do' or 'yield' on the line, e.g.
+		// "if x > 0 then" or "for x <- xs do", the keyword is in the virtual parens,
+		// the header is followed by its statement or block as in C
+		if (type() == SCALA_TYPE)
+		{
+			size_t scalaFirst = t + 1;
+			// the enumerators in braces are the block of the header, e.g. "for {\n  a <- xs\n} yield a"
+			if (tokens[scalaFirst]->kind == Kind::Open && tokens[scalaFirst]->text == "{")
+			{
+				// the parens follow the keyword, the brace may be on the next line
+				inserts.emplace_back(header.end, std::string(" (") + VIRTUAL_PAREN + VIRTUAL_PAREN + ")");
+				continue;
+			}
+			size_t scalaStop = 0;
+			// the statement of the 'if' begins with 'case', the pattern may be on the lines before
+			bool isCaseGuard = false;
+			int guardDepth = 0;
+			for (size_t j = t; j > 0; j--)
+			{
+				const Token& before = *tokens[j - 1];
+				if (before.kind == Kind::Close)
+					++guardDepth;
+				else if (before.kind == Kind::Open && --guardDepth < 0)
+					break;
+				if (guardDepth == 0
+				        && (before.text == ";" || before.text == std::string(1, VIRTUAL_TERMINATOR)
+				            || before.text == std::string(1, VIRTUAL_BRACE) || before.text == "=>"))
+					break;
+				isCaseGuard = before.kind == Kind::Word && before.text == "case" && guardDepth == 0;
+				if (isCaseGuard)
+					break;
+			}
+			// the condition may continue on the next lines, e.g. "if a\n  && b\nthen", it ends
+			// at the end of a statement, a C style condition in parens ends at its line end
+			int scalaDepth = 0;
+			bool isParenCondition = tokens[scalaFirst]->kind == Kind::Open;
+			for (size_t j = scalaFirst; j < tokens.size(); j++)
+			{
+				const Token& token = *tokens[j];
+				if (tokenLine[j] != tokenLine[j - 1] && scalaDepth == 0
+				        && (isParenCondition || tokenLine[j] - tokenLine[t] > 20))
+					break;
+				// the condition may contain an indentation region, e.g. "if xs.exists: x =>"
+				if (scalaDepth == 0 && ((token.text == ";" && word != "for") || token.text == std::string(1, VIRTUAL_TERMINATOR)))
+					break;
+				if (token.kind == Kind::Open)
+					++scalaDepth;
+				else if (token.kind == Kind::Close)
+				{
+					if (--scalaDepth < 0)
+						break;
+					if (scalaDepth == 0 && isParenCondition && j + 1 < tokens.size()
+					        && tokenLine[j + 1] != tokenLine[j])
+						break;
+				}
+				else if (scalaDepth == 0 && token.kind == Kind::Word
+				         && (token.text == "then" || token.text == "do" || token.text == "yield"))
+				{
+					scalaStop = j + 1;
+					break;
+				}
+				// the guard of a case clause ends before its arrow, e.g. "case x if x > 0 =>"
+				else if (scalaDepth == 0 && token.kind == Kind::Punct && token.text == "=>"
+				         && isCaseGuard)
+				{
+					scalaStop = j;
+					break;
+				}
+			}
+			if (scalaStop > scalaFirst)
+			{
+				inserts.emplace_back(tokens[scalaFirst]->start, std::string("(") + VIRTUAL_PAREN);
+				// a keyword beginning a line is after the parens, the line is aligned with the header
+				// as a line beginning with a closing paren, e.g. "if a\n  && b\nthen"
+				const Token& stop = *tokens[scalaStop - 1];
+				if (stop.kind == Kind::Word && scalaStop - 1 > scalaFirst
+				        && tokenLine[scalaStop - 1] != tokenLine[scalaStop - 2])
+					inserts.emplace_back(stop.start, std::string(1, VIRTUAL_PAREN) + ")");
+				else
+					inserts.emplace_back(stop.end, std::string(1, VIRTUAL_PAREN) + ")");
+			}
+			// the header opens an indentation region of its enumerators or condition, e.g. "for"
+			// followed by the generators and "do" on the next lines
+			else if (tokens[scalaFirst]->text == std::string(1, VIRTUAL_BRACE))
+				inserts.emplace_back(tokens[scalaFirst]->start, std::string("(") + VIRTUAL_PAREN + VIRTUAL_PAREN + ") ");
+			// the guard of an enumerator is the rest of the line, e.g. "if a > 0" in "for {"
+			else if (word == "if" && !isParenCondition)
+			{
+				size_t guardEnd = scalaFirst;
+				int depth = 0;
+				for (size_t j = scalaFirst; j < tokens.size() && tokenLine[j] == tokenLine[t]; j++)
+				{
+					const Token& token = *tokens[j];
+					if (depth == 0 && (token.text == ";" || token.text == std::string(1, VIRTUAL_TERMINATOR)
+					                   || token.text == std::string(1, VIRTUAL_BRACE)))
+						break;
+					if (token.kind == Kind::Open)
+						++depth;
+					else if (token.kind == Kind::Close && --depth < 0)
+						break;
+					guardEnd = j + 1;
+				}
+				if (guardEnd > scalaFirst)
+				{
+					inserts.emplace_back(tokens[scalaFirst]->start, std::string("(") + VIRTUAL_PAREN);
+					inserts.emplace_back(tokens[guardEnd - 1]->end, std::string(1, VIRTUAL_PAREN) + ")");
+				}
+			}
+			continue;
+		}
 
 		size_t first = t + 1;
 		// a header without a condition, e.g. "for {" or "when {"
@@ -2068,12 +2321,22 @@ std::string ASLexer::Terminator::run()
 		}
 
 		bool terminate = false;
+		// the pattern of a Scala case clause continues with its guard, e.g. "case (a, b)\n  if a > b =>"
+		bool isPattern = type() == SCALA_TYPE && next != nullptr && next->kind == Kind::Word && next->text == "if"
+		                 && line[0].kind == Kind::Word && line[0].text == "case"
+		                 && std::none_of(line.begin(), line.end(), [](const Token& token) { return token.text == "=>"; });
 		if (type() == GO_TYPE)
 			terminate = isGoTerminated(last);
+		else if (isPattern)
+			terminate = false;
 		else if (!isContinuationEnd(line))
 			terminate = (next == nullptr || !isContinuationStart(*next, last));
-		// a statement block ends the statement
-		if (last.kind == Kind::Close && last.closesBlock)
+		// a Scala guard of an enumerator has no statement, e.g. "if (a > 0)" before "}"
+		else if (type() == SCALA_TYPE && last.closesHeaderParen && next != nullptr
+		         && next->kind == Kind::Close && next->text == "}")
+			terminate = true;
+		// a statement block ends the statement, a Scala block is an expression
+		if (last.kind == Kind::Close && last.closesBlock && type() != SCALA_TYPE)
 			terminate = false;
 		if (terminate)
 			insertAt.push_back(last.end);
@@ -2100,7 +2363,7 @@ std::string ASLexer::Terminator::run()
 //-----------------------------------------------------------------------------
 
 ASLexer::ASLexer(int fileType_)
-	: fileType(fileType_), jsx(true), active(false), tabLength(4), changedLiteral(false)
+	: fileType(fileType_), jsx(true), active(false), tabLength(4), changedLiteral(false), lineRemoved(false)
 {
 }
 
@@ -2123,6 +2386,7 @@ bool ASLexer::isMaskedLanguage(int fileType_)
 		case KOTLIN_TYPE:
 		case SWIFT_TYPE:
 		case DART_TYPE:
+		case SCALA_TYPE:
 			return true;
 		default:
 			return false;
@@ -2177,7 +2441,7 @@ bool ASLexer::maskSource(std::string& text)
 	changedLiteral = false;
 	if (!isMaskedLanguage(fileType))
 		return false;
-	if (text.find_first_of("\x16\x1A\x1C\x1D\x1E\x1F") != std::string::npos)
+	if (text.find_first_of("\x15\x16\x1A\x1C\x1D\x1E\x1F") != std::string::npos)
 		return false;
 
 	Scanner scanner(*this, text);
@@ -2187,7 +2451,13 @@ bool ASLexer::maskSource(std::string& text)
 		Terminator terminator(*this, text);
 		text = terminator.run();
 	}
-	if (fileType == GO_TYPE || fileType == RUST_TYPE || fileType == SWIFT_TYPE || fileType == KOTLIN_TYPE)
+	if (fileType == SCALA_TYPE)
+	{
+		Terminator regions(*this, text);
+		text = regions.insertIndentRegions();
+	}
+	if (fileType == GO_TYPE || fileType == RUST_TYPE || fileType == SWIFT_TYPE || fileType == KOTLIN_TYPE
+	        || fileType == SCALA_TYPE)
 	{
 		Terminator headers(*this, text);
 		text = headers.insertHeaderParens();
@@ -2199,10 +2469,304 @@ bool ASLexer::maskSource(std::string& text)
 /**
  * Determine if a line break can end a statement in a language.
  */
+/**
+ * Scala: insert the virtual braces of the indentation regions, as the Scala 3
+ * compiler inserts its INDENT and OUTDENT tokens. A region opens after a line
+ * ending with a region opener (=, =>, :, then, else, do, yield, match, try, catch,
+ * finally, with, for, or an extension clause) when the next line of code is
+ * indented more, it closes before the first line indented less. After 'match'
+ * and 'catch' the case clauses may also be at the indentation of the line.
+ * The same regions are the bodies of the case clauses of Scala 2 code.
+ * The formatter then indents the code as code with braces, the virtual braces
+ * are removed from the output.
+ */
+std::string ASLexer::Terminator::insertIndentRegions()
+{
+	std::vector<Line> lines = tokenize();
+	const std::string terminator(1, VIRTUAL_TERMINATOR);
+
+	// the indentation width of the lines of code (-1 for the others) and their ends
+	std::vector<int> widths(lines.size(), -1);
+	std::vector<int> commentWidths(lines.size(), -1);   // of the line comments
+	std::vector<size_t> lineEnds(lines.size(), len);
+	std::vector<std::pair<size_t, char>> bracketLines;  // the lines and the chars of the open brackets
+	std::vector<size_t> depths(lines.size(), 0);        // the number of open brackets at the line start
+	std::vector<char> enclosing(lines.size(), '\0');    // the innermost open bracket at the line start
+	size_t pos = 0;
+	for (size_t l = 0; l < lines.size() && pos <= len; l++)
+	{
+		size_t start = pos;
+		size_t end = src.find_first_of("\r\n", pos);
+		if (end == npos)
+			end = len;
+		lineEnds[l] = end;
+		if (!lines[l].empty() && lines[l][0].start >= start && lines[l][0].start <= end)
+		{
+			int width = 0;
+			for (size_t k = start; k < lines[l][0].start; k++)
+				width += (src[k] == '\t') ? 4 - width % 4 : 1;
+			widths[l] = width;
+			depths[l] = bracketLines.size();
+			enclosing[l] = bracketLines.empty() ? '\0' : bracketLines.back().second;
+			// a line beginning with a closing bracket continues the line of the opening one,
+			// e.g. ")(using Context) extends TypeMap:" after the parameters of a class
+			if (lines[l][0].kind == Kind::Close && lines[l][0].text != "}" && !bracketLines.empty())
+				widths[l] = widths[bracketLines.back().first];
+			for (const Token& token : lines[l])
+			{
+				if (token.kind == Kind::Open)
+					bracketLines.emplace_back(l, token.text[0]);
+				else if (token.kind == Kind::Close && !bracketLines.empty())
+					bracketLines.pop_back();
+			}
+		}
+		else if (lines[l].empty())
+		{
+			size_t first = src.find_first_not_of(" \t", start);
+			if (first != npos && first + 1 < end && src[first] == '/' && src[first + 1] == '/')
+			{
+				int width = 0;
+				for (size_t k = start; k < first; k++)
+					width += (src[k] == '\t') ? 4 - width % 4 : 1;
+				commentWidths[l] = width;
+			}
+		}
+		pos = end;
+		if (pos < len && src[pos] == '\r' && pos + 1 < len && src[pos + 1] == '\n')
+			pos += 2;
+		else
+			++pos;
+	}
+
+	// the last token of a line, not a virtual terminator
+	auto lastIndex = [&](const Line& line) -> size_t
+	{
+		size_t i = line.size();
+		while (i > 0 && (line[i - 1].text == terminator
+		                 || (line[i - 1].text == ";" && i > 1 && line[i - 2].text == terminator)))
+			--i;
+		return i;           // one past the last token, 0 if none
+	};
+	auto isOpener = [&](const Line& line) -> bool
+	{
+		size_t end = lastIndex(line);
+		if (end == 0)
+			return false;
+		const Token& last = line[end - 1];
+		// an end marker, e.g. "end if"
+		if (end == 2 && line[0].kind == Kind::Word && line[0].text == "end")
+			return false;
+		if (last.kind == Kind::Punct)
+			return last.text == "=" || last.text == "=>" || last.text == ":" || last.text == "?=>";
+		if (last.kind == Kind::Word)
+		{
+			static const std::string_view openers[] =
+			{
+				"then", "else", "do", "yield", "match", "try", "catch", "finally", "with", "for", "while", "if"
+			};
+			return std::find(std::begin(openers), std::end(openers), last.text) != std::end(openers);
+		}
+		// the methods of an extension, e.g. "extension (x: Int)"
+		if (last.kind == Kind::Close && line[0].kind == Kind::Word && line[0].text == "extension")
+			return last.text == ")" || last.text == "]";
+		return false;
+	};
+	// the last bracket the line opens and does not close, e.g. '{' of "xs.map { x =>"
+	auto openedBracket = [&](const Line& line) -> char
+	{
+		std::vector<char> open;
+		for (const Token& token : line)
+		{
+			if (token.kind == Kind::Open)
+				open.push_back(token.text[0]);
+			else if (token.kind == Kind::Close && !open.empty())
+				open.pop_back();
+		}
+		return open.empty() ? '\0' : open.back();
+	};
+	auto lastWord = [&](const Line& line) -> std::string
+	{
+		size_t end = lastIndex(line);
+		return end == 0 ? std::string() : line[end - 1].text;
+	};
+
+	struct Region
+	{
+		int width;          // the indentation of the lines of the region
+		bool cases;         // the case clauses at the indentation of the match
+		size_t depth;       // the number of open brackets in the region
+		bool inParens;      // the region is in parens, its statements have no terminators
+		int openerWidth;    // the indentation of the line opening the region
+		std::string opener; // the last token of the line opening the region
+	};
+	std::vector<Region> regions;
+	std::vector<std::pair<size_t, std::string>> inserts;
+	std::vector<std::pair<size_t, size_t>> erases;      // the ranges of the source removed
+	const std::string open = std::string(" ") + VIRTUAL_BRACE + "{";
+	// the marker follows a closing brace, its line begins with the brace as a real one
+	const std::string close = std::string("\n}") + VIRTUAL_BRACE;
+
+	size_t previous = npos;         // the previous line of code
+	// the end of the last line of a region before the line, a line comment indented
+	// as the region is in it
+	auto regionEnd = [&](size_t l, int width) -> size_t
+	{
+		size_t last = previous;
+		for (size_t k = previous + 1; k < l; k++)
+		{
+			if (commentWidths[k] >= width)
+				last = k;
+		}
+		return lineEnds[last];
+	};
+	// the indentation of the line beginning the statement, the region of an opener at
+	// the end of a continuation line is indented relative to it, e.g. "case x if a\n    && b =>"
+	int statementWidth = 0;
+	bool statementEnded = true;
+	for (size_t l = 0; l < lines.size(); l++)
+	{
+		if (widths[l] < 0)
+			continue;
+		int width = widths[l];
+		const Line& line = lines[l];
+		bool isCase = line[0].kind == Kind::Word && line[0].text == "case";
+		// a line beginning with an operator continues the statement of the region,
+		// e.g. "     a\n  || b" after "def f ="
+		bool continuesStatement = previous != npos && line[0].text != ";"
+		                          && !lines[previous].empty() && lines[previous].back().text != ";"
+		                          && isContinuationStart(line[0], lines[previous].back());
+		bool isOperatorLine = continuesStatement && line[0].kind == Kind::Punct;
+		bool continues = continuesStatement
+		                 || (line[0].kind == Kind::Word
+		                     && (line[0].text == "else" || line[0].text == "catch" || line[0].text == "finally"));
+		bool closedAny = false;
+		while (!regions.empty() && previous != npos)
+		{
+			const Region& region = regions.back();
+			// the keyword continuing an if or a try closes its region at any indentation,
+			// e.g. "if a then\n  x\n  else y"
+			const std::string& first = line[0].text;
+			bool closesByKeyword = !closedAny && line[0].kind == Kind::Word
+			                       && ((first == "else" && region.opener == "then")
+			                           || ((first == "catch" || first == "finally")
+			                               && (region.opener == "try" || region.opener == "catch")));
+			if (!(width < region.width || (region.cases && width == region.width && !isCase) || closesByKeyword))
+				break;
+			if (isOperatorLine && width > region.openerWidth && width < region.width)
+				break;
+			// a closing bracket beginning the line closes the regions in the brackets only
+			if (line[0].kind == Kind::Close && line[0].text != "}" && region.depth < depths[l])
+				break;
+			closedAny = true;
+			// the region ends its statement unless the line continues it, e.g. ".merge" or "else"
+			inserts.emplace_back(regionEnd(l, region.width), continues ? close : close + terminator + ";");
+			regions.pop_back();
+		}
+		if (statementEnded || (closedAny && !continues))
+			statementWidth = width;
+
+		size_t next = l + 1;
+		while (next < lines.size() && widths[next] < 0)
+			++next;
+		bool opened = false;
+		bool caseEnded = false;     // a case clause without a body, e.g. "case _ =>"
+		// the body of a lambda may be a region in its parens, e.g. "xs.foreach(x =>",
+		// the cases of a match in a block, e.g. "&& { this match"
+		// a brace beginning the next line is the block, e.g. "else\n{"
+		char bracket = openedBracket(line);
+		if (next < lines.size() && isOpener(line) && lines[next][0].text != "{"
+		        && (bracket == '\0' || (bracket == '(' && lastWord(line) == "=>")
+		            || (bracket == '{' && lastWord(line) == "match")))
+		{
+			int nextWidth = widths[next];
+			std::string word = lastWord(line);
+			bool nextIsCase = lines[next][0].kind == Kind::Word && lines[next][0].text == "case";
+			int baseWidth = std::min(width, statementWidth);
+			bool caseRegion = nextWidth == baseWidth && nextIsCase && (word == "match" || word == "catch");
+			if (nextWidth > baseWidth || caseRegion)
+			{
+				opened = true;
+				// the brace replaces a virtual terminator of the line, e.g. "extension (x: Int)"
+				size_t braceAt = line[lastIndex(line) - 1].end;
+				if (lastIndex(line) < line.size())
+					erases.emplace_back(braceAt, line.back().end);
+				inserts.emplace_back(braceAt, open);
+				regions.push_back({ nextWidth, caseRegion, depths[next],
+				                    enclosing[next] == '(' || enclosing[next] == '[', width, word });
+			}
+			// a case clause without a body ends the statement, e.g. "case _ =>"
+			else if (word == "=>")
+			{
+				inserts.emplace_back(line[lastIndex(line) - 1].end, terminator + ";");
+				caseEnded = true;
+			}
+		}
+		// a region in brackets closes with them, e.g. "xs.map(x =>\n  f(x))"
+		if (!opened)
+		{
+			size_t depth = depths[l];
+			for (const Token& token : line)
+			{
+				if (token.kind == Kind::Open)
+					++depth;
+				else if (token.kind == Kind::Close && depth > 0)
+				{
+					--depth;
+					while (!regions.empty() && regions.back().depth > depth)
+					{
+						inserts.emplace_back(token.start, std::string("}") + VIRTUAL_BRACE);
+						regions.pop_back();
+					}
+				}
+			}
+		}
+		// the statements of a region in parens are terminated here, e.g. in "xs.foreach(x =>"
+		if (!opened && !regions.empty() && next < lines.size())
+		{
+			const Region& region = regions.back();
+			if (region.inParens && depths[l] == region.depth && depths[next] == region.depth
+			        && widths[next] == region.width && lastIndex(line) == line.size()
+			        && line.back().text != ";" && !isContinuationEnd(line)
+			        && !isContinuationStart(lines[next][0], line.back()))
+				inserts.emplace_back(line.back().end, terminator + ";");
+		}
+		previous = l;
+		// the statement ends at a terminator, a region or a brace at the end of the line
+		size_t end = lastIndex(line);
+		statementEnded = opened || caseEnded || end < line.size() || line.back().text == ";"
+		                 || line.back().text == "{" || line.back().text == "}";
+	}
+	while (!regions.empty() && previous != npos)
+	{
+		inserts.emplace_back(regionEnd(lines.size(), regions.back().width), close + terminator + ";");
+		regions.pop_back();
+	}
+
+	std::stable_sort(inserts.begin(), inserts.end(),
+	                 [](const auto& a, const auto& b) { return a.first < b.first; });
+	std::string result;
+	result.reserve(len + inserts.size() * 4);
+	size_t at = 0;
+	size_t erase = 0;
+	for (const auto& insert : inserts)
+	{
+		result.append(src, at, insert.first - at);
+		result += insert.second;
+		at = insert.first;
+		// skip an erased range beginning here
+		while (erase < erases.size() && erases[erase].first < at)
+			++erase;
+		if (erase < erases.size() && erases[erase].first == at)
+			at = erases[erase++].second;
+	}
+	result.append(src, at, len - at);
+	return result;
+}
+
 bool ASLexer::isNewlineTerminated(int fileType_)
 {
 	return fileType_ == JS_TYPE || fileType_ == TS_TYPE || fileType_ == GO_TYPE
-	       || fileType_ == KOTLIN_TYPE || fileType_ == SWIFT_TYPE;
+	       || fileType_ == KOTLIN_TYPE || fileType_ == SWIFT_TYPE || fileType_ == SCALA_TYPE;
 }
 
 size_t ASLexer::indentWidth(std::string_view ws) const
@@ -2223,9 +2787,11 @@ size_t ASLexer::indentWidth(std::string_view ws) const
  */
 std::string ASLexer::restoreLine(const std::string& line) const
 {
+	lineRemoved = false;
 	if (!active)
 		return line;
 
+	bool hasVirtualMarker = false;
 	std::string result;
 	result.reserve(line.length());
 	size_t indentEnd = line.find_first_not_of(" \t");
@@ -2278,16 +2844,48 @@ std::string ASLexer::restoreLine(const std::string& line) const
 				++j;
 			if (j < line.length() && line[j] == ')')
 				++j;
+			// the parens closed at the beginning of a line keep its indentation, e.g. "then"
+			if (result.find_first_not_of(" \t") == std::string::npos)
+			{
+				while (j < line.length() && (line[j] == ' ' || line[j] == '\t'))
+					++j;
+				i = j;
+				continue;
+			}
 			while (!result.empty() && (result.back() == ' ' || result.back() == '\t'))
 				result.pop_back();
-			if (j < line.length() && line[j] != ' ' && line[j] != '\t')
+			if (j < line.length() && line[j] != ' ' && line[j] != '\t' && line[j] != VIRTUAL_TERMINATOR)
 				result += ' ';
+			i = j;
+			continue;
+		}
+		if (ch == '}' && i + 1 < line.length() && line[i + 1] == VIRTUAL_BRACE)
+		{
+			hasVirtualMarker = true;
+			i += 2;
+			continue;
+		}
+		if (ch == VIRTUAL_BRACE)
+		{
+			// remove the marker, the brace, and the space before an opening brace
+			hasVirtualMarker = true;
+			size_t j = i + 1;
+			if (j < line.length() && (line[j] == '{' || line[j] == '}'))
+			{
+				if (line[j] == '{')
+				{
+					while (!result.empty() && (result.back() == ' ' || result.back() == '\t'))
+						result.pop_back();
+				}
+				++j;
+			}
 			i = j;
 			continue;
 		}
 		if (ch == VIRTUAL_TERMINATOR)
 		{
 			// remove the marker and the inserted terminator
+			hasVirtualMarker = true;
 			size_t j = i + 1;
 			while (j < line.length() && (line[j] == ' ' || line[j] == '\t'))
 				++j;
@@ -2306,7 +2904,25 @@ std::string ASLexer::restoreLine(const std::string& line) const
 			result += ch;
 		++i;
 	}
+	// a line of a virtual closing brace is removed, or of a virtual terminator broken
+	// from its statement, e.g. by the max code length
+	if (hasVirtualMarker && result.find_first_not_of(" \t") == std::string::npos)
+	{
+		lineRemoved = true;
+		return std::string();
+	}
+	// the space before a removed marker ending the line is removed, e.g. in "x \x1F;"
+	if (hasVirtualMarker && !line.empty() && line.back() != ' ' && line.back() != '\t')
+	{
+		while (!result.empty() && (result.back() == ' ' || result.back() == '\t'))
+			result.pop_back();
+	}
 	return result;
+}
+
+bool ASLexer::isLineRemoved() const
+{
+	return lineRemoved;
 }
 
 /**

@@ -8,8 +8,8 @@
 
     <title>Artistic Style - Documentation</title>
     <meta name="description" content="Artistic Style is a source code indenter, formatter and beautifier for C, C++, Objective-C, C#, Java,
-          JavaScript, TypeScript, JSX, Go, Rust, Kotlin, Swift and Dart." />
-    <meta name="keywords" content="artistic style, astyle, source code formatter, beautifier, indenter, C++, C#, Java, JavaScript, TypeScript, Go, Rust, Kotlin, Swift, Dart" />
+          JavaScript, TypeScript, JSX, Go, Rust, Kotlin, Swift, Dart and Scala." />
+    <meta name="keywords" content="artistic style, astyle, source code formatter, beautifier, indenter, C++, C#, Java, JavaScript, TypeScript, Go, Rust, Kotlin, Swift, Dart, Scala" />
     <meta name="color-scheme" content="dark" />
     <link href="favicon.ico" rel="shortcut icon" type="image/x-icon" />
     <link href="styles.css" rel="stylesheet" type="text/css" />
@@ -21,9 +21,9 @@
 <body id="Contents">
 
     <div id="slogan">Artistic Style
-        <span class="tagline">The source code formatter for thirteen languages. Every language is formatted the way its own
+        <span class="tagline">The source code formatter for fourteen languages. Every language is formatted the way its own
             community formatter does, C, C++ and Objective-C exactly as always.</span>
-        <span class="chips"><span class="chip">C</span><span class="chip">C++</span><span class="chip">Objective-C</span><span class="chip">C#</span><span class="chip">Java</span><span class="chip">JavaScript</span><span class="chip new">TypeScript</span><span class="chip new">JSX / TSX</span><span class="chip new">Go</span><span class="chip new">Rust</span><span class="chip new">Kotlin</span><span class="chip new">Swift</span><span class="chip new">Dart</span></span>
+        <span class="chips"><span class="chip">C</span><span class="chip">C++</span><span class="chip">Objective-C</span><span class="chip">C#</span><span class="chip">Java</span><span class="chip">JavaScript</span><span class="chip new">TypeScript</span><span class="chip new">JSX / TSX</span><span class="chip new">Go</span><span class="chip new">Rust</span><span class="chip new">Kotlin</span><span class="chip new">Swift</span><span class="chip new">Dart</span><span class="chip new">Scala</span></span>
         <span class="actions">
             <a class="button primary" href="https://adhoc-protocol.github.io/AStyle/">Open the style configurator</a>
             <a class="button" href="https://github.com/AdHoc-Protocol/AStyle/releases/latest">Download</a>
@@ -133,6 +133,7 @@
                    <li><a href="#_pad-oper">pad-oper </a><li>
                    <li><a href="#_pad-comma">pad-comma </a><li>
                    <li><a href="#_pad-negation">pad-negation </a><li>
+                   <li><a href="#_pad-type-colon">pad-type-colon </a><li>
                    <li><a href="#_pad-include">pad-include </a><li>
                    <li><a href="#_pad-paren">pad-paren </a><li>
                    <li><a href="#_pad-paren-out">pad-paren=out </a><li>
@@ -241,7 +242,7 @@
     <h3 id="_Languages">Languages</h3>
 
     <p>
-        Artistic Style formats thirteen languages. Every language is formatted the way its own community formatter does,
+        Artistic Style formats fourteen languages. Every language is formatted the way its own community formatter does,
         with the options of Artistic Style: the brace styles, the indentation, the padding, the blank lines and the line
         length work for every language. C, C++ and Objective-C are formatted exactly as by Artistic Style 3.6.19.</p>
 
@@ -258,6 +259,7 @@
         <tr><td>Kotlin</td><td><code>kotlin</code></td><td><code>.kt .kts</code></td><td>ktlint</td></tr>
         <tr><td>Swift</td><td><code>swift</code></td><td><code>.swift</code></td><td>swift-format</td></tr>
         <tr><td>Dart</td><td><code>dart</code></td><td><code>.dart</code></td><td>dart format</td></tr>
+        <tr><td>Scala 2, Scala 3</td><td><code>scala</code></td><td><code>.scala .sc .sbt</code></td><td>IntelliJ Scala plugin, with the significant indentation of Scala 3</td></tr>
     </table>
 
     <div class="callout">
@@ -517,6 +519,46 @@ ElevatedButton(onPressed: _increment, child: const Text("+")),
 </pre>
     </div>
 
+    <p class="example-title">Scala 3 <code>--mode=scala</code><br /><span class="example-note">the significant indentation of Scala 3 re-indented from 2 to 4 spaces, the meaning of the code is kept</span></p>
+    <div class="code" data-lang="scala">
+        <pre>object Geometry:
+  def classify(n: Int): String =
+    if n &lt; 0 then
+      "negative"
+    else if n == 0 then "zero"
+    else
+      val big = n &gt; 1000
+      if big then "big" else "positive"
+
+  def render(items: List[String]): String =
+    items
+      .filter(_.nonEmpty)
+      .map: item =&gt;
+        s"[${item.trim}]"
+      .mkString(", ")
+end Geometry
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>object Geometry:
+    def classify(n: Int): String =
+        if n &lt; 0 then
+            "negative"
+        else if n == 0 then "zero"
+        else
+            val big = n &gt; 1000
+            if big then "big" else "positive"
+
+    def render(items: List[String]): String =
+        items
+            .filter(_.nonEmpty)
+            .map: item =&gt;
+                s"[${item.trim}]"
+            .mkString(", ")
+end Geometry
+</pre>
+    </div>
+
     <p class="example-title">Java <code>--mode=java --indent-switches</code><br /><span class="example-note">a switch expression with arrow case labels, a block and a guard</span></p>
     <div class="code" data-lang="java">
         <pre>String describe(Object o) {
@@ -584,7 +626,8 @@ var moved = p with { X = 1 };
     <p>
         Artistic Style determines the language from the file extension: <code>.java</code> Java, <code>.cs</code> C#,
         <code>.js .mjs .cjs .jsx</code> JavaScript, <code>.ts .mts .cts .tsx</code> TypeScript, <code>.go</code> Go,
-        <code>.rs</code> Rust, <code>.kt .kts</code> Kotlin, <code>.swift</code> Swift and <code>.dart</code> Dart.
+        <code>.rs</code> Rust, <code>.kt .kts</code> Kotlin, <code>.swift</code> Swift, <code>.dart</code> Dart and
+        <code>.scala .sc .sbt</code> Scala.
         Everything else is a C type file (C, C++, C++/CLI, or <span style="white-space: nowrap;">Objective-C</span>).
         With <a href="#_stdin=">--stdin=</a> the extension of the given file name is used. If you are using a
         non-standard file extension, use one of the <a href="#_mode">--mode=</a> options.</p>
@@ -1872,7 +1915,7 @@ fooFunction(barArg1,
     with an assignment or an opening paren. A paren, bracket or brace that ends a line opens an indented
     block that is closed at the indent of the statement. This is how Prettier, gofmt, rustfmt, ktlint,
     swift-format and dart format indent. It is the default for JavaScript, TypeScript, Go, Rust, Kotlin,
-    Swift and Dart files.
+    Swift, Dart and Scala files.
 </p>
 
 <div class="code">
@@ -2096,6 +2139,34 @@ isBar = false;
             becomes:</p>
         <pre>if ( ! isFoo(a, b))
     bar(a, b);
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
+    <p id="_pad-type-colon">
+        <code class="title">--pad-type-colon=after</code><br />
+        <code class="title">--pad-type-colon=all</code><br />
+        <code class="title">--pad-type-colon=none</code><br />
+        Scala only. Set the spaces around the colon of a type, of a parameter, a value, a result, a type bound
+        or a pattern: <code>after</code> gives <code>x: Int</code> (the IntelliJ Scala default), <code>all</code>
+        gives <code>x : Int</code> and <code>none</code> gives <code>x:Int</code>. Without the option the spaces
+        are not changed. A colon of an operator, e.g. <code>::</code> or <code>+:</code>, a colon ending the line,
+        e.g. <code>object A:</code>, and the colon of a lambda argument, e.g. <code>xs.map: x =&gt;</code>, are
+        not changed. A space stays between an operator name and the colon, e.g. <code>val +- : Int</code>.
+    </p>
+    <div class="code" data-lang="scala">
+        <pre>def area(s:Shape , scale : Double):Double =
+  s match
+    case c:Circle =&gt; math.Pi*c.r*c.r*scale
+    case _ =&gt; 0
+</pre>
+        <p class="code">
+            becomes with <code>--pad-type-colon=after --indent=spaces=2</code>:</p>
+        <pre>def area(s: Shape, scale: Double): Double =
+  s match
+    case c: Circle =&gt; math.Pi*c.r*c.r*scale
+    case _ =&gt; 0
 </pre>
     </div>
 
@@ -2842,12 +2913,13 @@ Foo(bool isFoo);</pre>
         <code class="title">--mode=kotlin</code><br />
         <code class="title">--mode=swift</code><br />
         <code class="title">--mode=dart</code><br />
+        <code class="title">--mode=scala</code><br />
         <code class="title">--mode=ghc <i>(experimental)</i></code><br />
         <code class="title">--mode=gsc <i>(experimental)</i></code><br />
         Indent a C type, C#, JavaScript, TypeScript, Java, <span style="white-space: nowrap;">Objective-C</span>,
-        Go, Rust, Kotlin, Swift or Dart file. The other listed modes are experimental.<br>
+        Go, Rust, Kotlin, Swift, Dart or Scala file. The other listed modes are experimental.<br>
         C type files are C, C++, C++/CLI. The option is usually set from the file extension for each file:
-        .java, .cs, .js .mjs .cjs .jsx, .ts .mts .cts, .tsx, .go, .rs, .kt .kts, .swift, .dart, .gsc .ghc,
+        .java, .cs, .js .mjs .cjs .jsx, .ts .mts .cts, .tsx, .go, .rs, .kt .kts, .swift, .dart, .scala .sc .sbt, .gsc .ghc,
         any other extension is a C type file. With <a href="#_stdin=">--stdin=</a> the extension of the given file name is used.
         You can override the setting with this entry. It will be used for all files, regardless of the file extension.
         It allows the formatter to identify language specific syntax such as C++ classes, templates, and keywords.

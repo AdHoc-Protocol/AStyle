@@ -8,7 +8,7 @@
 #   ASTYLE_REF          a reference astyle built from the upstream sources
 #   CORPUS_CPP          a list file (one path per line) of C/C++ sources
 #   CORPUS_CS, CORPUS_TS, CORPUS_JS, CORPUS_JAVA, CORPUS_GO, CORPUS_RUST,
-#   CORPUS_KOTLIN, CORPUS_SWIFT, CORPUS_DART
+#   CORPUS_KOTLIN, CORPUS_SWIFT, CORPUS_DART, CORPUS_SCALA
 #                       directories of sources of the language
 # A check is skipped if its variable is not set.
 
@@ -42,7 +42,7 @@ fi
 	--ext .js,.mjs,.jsx $CORPUS_JS
 [ -n "$CORPUS_JAVA" ] && run "Java" node tests/tools/corpus-check.js --bin "$BIN" --normalize-eol --max "$MAX" --show 5 \
 	--ext .java $CORPUS_JAVA
-for lang in GO:.go RUST:.rs KOTLIN:.kt,.kts SWIFT:.swift DART:.dart; do
+for lang in GO:.go RUST:.rs KOTLIN:.kt,.kts SWIFT:.swift DART:.dart SCALA:.scala,.sc; do
 	name=${lang%%:*}
 	ext=${lang#*:}
 	eval dirs=\$CORPUS_$name

@@ -13,7 +13,7 @@
 'use strict';
 
 const C_FAMILY = ['cpp', 'c', 'objc'];
-const CURLY = ['cpp', 'c', 'objc', 'cs', 'java', 'js', 'jsx', 'ts', 'tsx', 'go', 'rust', 'kotlin', 'swift', 'dart'];
+const CURLY = ['cpp', 'c', 'objc', 'cs', 'java', 'js', 'jsx', 'ts', 'tsx', 'go', 'rust', 'kotlin', 'swift', 'dart', 'scala'];
 
 const categories = [
 	{ id: 'style', label: 'Brace Style' },
@@ -192,6 +192,14 @@ const options = [
 			['before', 'Before and after "!"', '--pad-negation=before'],
 		]),
 		desc: 'Insert a space after the negation operator.', doc: '_pad-negation' },
+	{ id: 'padTypeColon', cat: 'padding', type: 'enum', label: 'Type colon', default: '', langs: ['scala'],
+		values: values([
+			['', 'Keep', null],
+			['after', 'After, x: Int', '--pad-type-colon=after'],
+			['all', 'Before and after, x : Int', '--pad-type-colon=all'],
+			['none', 'No spaces, x:Int', '--pad-type-colon=none'],
+		]),
+		desc: 'The spaces around the colon of a type, e.g. of a parameter or a result.', doc: '_pad-type-colon' },
 	{ id: 'padInclude', cat: 'padding', type: 'enum', label: '#include', default: '', langs: C_FAMILY,
 		values: values([
 			['', 'Keep', null],
@@ -308,6 +316,7 @@ const languages = [
 	{ id: 'kotlin', label: 'Kotlin', mode: 'kotlin', ext: 'kt' },
 	{ id: 'swift', label: 'Swift', mode: 'swift', ext: 'swift' },
 	{ id: 'dart', label: 'Dart', mode: 'dart', ext: 'dart' },
+	{ id: 'scala', label: 'Scala', mode: 'scala', ext: 'scala' },
 ];
 
 // Presets of the settings of well-known formatters, as the starting point of a
@@ -317,6 +326,7 @@ const presets = [
 	{ id: 'prettier', label: 'Prettier-like (JS/TS)', settings: { style: 'java', indentSize: 2, padOper: true, padComma: true, padHeader: true, continuation: 'block' } },
 	{ id: 'rider', label: 'Rider / Visual Studio (C#)', settings: { style: 'allman', indentSwitches: true, padOper: true, padComma: true, padHeader: true, unpadSemicolon: true } },
 	{ id: 'intellij', label: 'IntelliJ (Java, Kotlin)', settings: { style: 'java', indentSwitches: true, padOper: true, padComma: true, padHeader: true, indentContinuation: 2 } },
+	{ id: 'intellij-scala', label: 'IntelliJ Scala plugin', settings: { indentSize: 2, padOper: true, padComma: true, padHeader: true, padTypeColon: 'after' } },
 	{ id: 'google', label: 'Google C++', settings: { style: 'google', indentSize: 2, padOper: true, padComma: true, padHeader: true, alignPointer: 'type', indentClasses: false } },
 	{ id: 'linux', label: 'Linux kernel', settings: { style: 'linux', indentType: 'force-tab', indentSize: 8, padOper: true, padHeader: true, alignPointer: 'name', maxCodeLength: 80 } },
 	{ id: 'gofmt', label: 'gofmt (Go)', settings: { style: 'java', indentType: 'force-tab', continuation: 'block' } },

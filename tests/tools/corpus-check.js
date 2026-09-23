@@ -17,6 +17,7 @@
 //   --cstokens          compare Roslyn tokens for .cs files (tests/tools/cstokens must be built)
 //   --unchanged         report the files changed by formatting (for a corpus formatted
 //                       by the reference formatter of the language, e.g. gofmt)
+//   --ignore-trailing   with --unchanged, ignore the trailing whitespace of the lines
 //   --normalize-eol     convert the line ends of the input to LF before formatting
 //                       (files with mixed line ends are not idempotent in astyle)
 //
@@ -47,6 +48,7 @@ function parseArgs(argv) {
 		else if (a === '--normalize-eol') args.normalizeEol = true;
 		else if (a === '--cstokens') args.csTokens = true;
 		else if (a === '--unchanged') args.unchanged = true;
+		else if (a === '--ignore-trailing') args.ignoreTrailing = true;
 		else args.inputs.push(a);
 	}
 	if (!args.bin) throw new Error('--bin is required');
@@ -215,10 +217,12 @@ function main() {
 				add('nonspace', file, `[${opts}] ${context(a, i)} -> ${context(b, i)}`);
 				if (args.keep) keep(args.keep, file, r1.out);
 			}
-			if (args.unchanged && r1.out !== original) {
-				const i = firstDiff(original, r1.out);
-				const line = original.slice(0, i).split(String.fromCharCode(10)).length;
-				add('changed', file, `[${opts}] line ${line}: ${context(original, i)} -> ${context(r1.out, i)}`);
+			const trimEnds = text => (args.ignoreTrailing ? text.split(/\r?\n/).map(l => l.replace(/[ \t]+$/, '')).join('\n') : text);
+			if (args.unchanged && trimEnds(r1.out) !== trimEnds(original)) {
+				const before = trimEnds(original), after = trimEnds(r1.out);
+				const i = firstDiff(before, after);
+				const line = before.slice(0, i).split(String.fromCharCode(10)).length;
+				add('changed', file, `[${opts}] line ${line}: ${context(before, i)} -> ${context(after, i)}`);
 			}
 			const r2 = format(args.bin, opts, file, r1.out);
 			if (r2.error) add('crash', file, `[${opts}] pass 2: ${r2.error}`);

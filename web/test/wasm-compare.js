@@ -18,7 +18,7 @@ const AStyleWasm = require('../public/astyle-wasm');
 const suffixes = {
 	'.c': 'c', '.h': 'cpp', '.hpp': 'cpp', '.cpp': 'cpp', '.cc': 'cpp', '.cxx': 'cpp', '.m': 'objc', '.mm': 'objc',
 	'.cs': 'cs', '.java': 'java', '.js': 'js', '.mjs': 'js', '.jsx': 'jsx', '.ts': 'ts', '.tsx': 'tsx',
-	'.go': 'go', '.rs': 'rust', '.kt': 'kotlin', '.kts': 'kotlin', '.swift': 'swift', '.dart': 'dart',
+	'.go': 'go', '.rs': 'rust', '.kt': 'kotlin', '.kts': 'kotlin', '.swift': 'swift', '.dart': 'dart', '.scala': 'scala',
 };
 
 const optionSets = [
