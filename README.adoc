@@ -1,0 +1,280 @@
+= AStyle
+:toc: macro
+:toc-title:
+:toclevels: 1
+
+image:https://github.com/AdHoc-Protocol/AStyle/actions/workflows/playground.yml/badge.svg[Playground,link=https://github.com/AdHoc-Protocol/AStyle/actions/workflows/playground.yml]
+image:https://github.com/AdHoc-Protocol/AStyle/actions/workflows/release.yml/badge.svg[Release,link=https://github.com/AdHoc-Protocol/AStyle/actions/workflows/release.yml]
+image:https://img.shields.io/github/v/release/AdHoc-Protocol/AStyle?label=download[Latest release,link=https://github.com/AdHoc-Protocol/AStyle/releases/latest]
+image:https://img.shields.io/badge/license-MIT-blue[MIT License,link=AStyle/LICENSE.md]
+
+*One formatter for a polyglot codebase.* Artistic Style, the classic C/C++/C#/Java formatter, extended with
+*TypeScript, JSX, Go, Rust, Kotlin, Swift and Dart*, and formatting every language the way its own community
+formatter does. A single native executable without dependencies, for Linux, Windows and macOS, and a WebAssembly build.
+
+[.text-center]
+https://adhoc-protocol.github.io/AStyle/[image:web/docs/playground.png[The AStyle Playground,width=100%]]
+
+[.text-center]
+*https://adhoc-protocol.github.io/AStyle/[▶ Open the style configurator]* +
+Pick a language, hover an option to see what it changes in the code, detect the style of your own code,
+copy the `.astylerc`. It runs in your browser, the code is not sent anywhere.
+
+toc::[]
+
+== Languages
+
+[cols="2,1,3,3",options="header"]
+|===
+|Language |Mode |Suffixes |Formatted like
+
+|C, pass:[C++], pass:[C++]/CLI |`c` |`.c .h .cpp .hpp .cc .cxx` ... |Artistic Style 3.6.19, byte for byte
+|Objective-C |`objc` |`.m .mm` |Artistic Style 3.6.19, byte for byte
+|C# |`cs` |`.cs` |Rider, with the modern C# syntax
+|Java |`java` |`.java` |Artistic Style, with records, text blocks, arrow switch labels
+|JavaScript, JSX |`js`, `jsx` |`.js .mjs .cjs .jsx` |Prettier
+|TypeScript, TSX |`ts`, `tsx` |`.ts .mts .cts .tsx` |Prettier
+|Go |`go` |`.go` |gofmt
+|Rust |`rust` |`.rs` |rustfmt
+|Kotlin |`kotlin` |`.kt .kts` |ktlint
+|Swift |`swift` |`.swift` |swift-format
+|Dart |`dart` |`.dart` |dart format
+|===
+
+The language comes from the file suffix, also for `--stdin=`, or from `--mode=`.
+The other options work for every language: the brace styles, the indentation, the padding, the blank lines,
+the line length.
+
+== Examples
+
+The input on the left, `astyle` on the right.
+
+.JSX, `--indent=spaces=2`: the elements are indented by their structure, as Prettier does
+[cols="1,1"]
+|===
+a|
+[source,jsx]
+----
+export const List = ({items}) => (
+<ul>
+{items.map(item => (
+<li key={item.id}
+onClick={() => select(item)}>
+{item.name}
+</li>
+))}
+</ul>
+);
+----
+a|
+[source,jsx]
+----
+export const List = ({items}) => (
+  <ul>
+    {items.map(item => (
+      <li key={item.id}
+        onClick={() => select(item)}>
+        {item.name}
+      </li>
+    ))}
+  </ul>
+);
+----
+|===
+
+.C#, `--style=allman --pad-oper`: switch expressions, auto-properties kept on one line
+[cols="1,1"]
+|===
+a|
+[source,csharp]
+----
+public decimal Discount(Order o) => o switch {
+{ Total: > 1000 } => o.Total*0.1m,
+{ Vip: true } => 50,
+_ => 0
+};
+public string Name { get; set; }
+----
+a|
+[source,csharp]
+----
+public decimal Discount(Order o) => o switch {
+    { Total: > 1000 } => o.Total * 0.1m,
+    { Vip: true } => 50,
+    _ => 0
+};
+public string Name { get; set; }
+----
+|===
+
+.Go, `--indent=force-tab`: as gofmt, composite literals `{{` add one indent
+[cols="1,1"]
+|===
+a|
+[source,go]
+----
+func main() {
+if err := run(); err != nil {
+log.Fatal(err)
+}
+tests := []struct{ in, want string }{{
+in: "a",
+want: "A",
+}}
+}
+----
+a|
+[source,go]
+----
+func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+	tests := []struct{ in, want string }{{
+		in: "a",
+		want: "A",
+	}}
+}
+----
+|===
+
+== Install
+
+Download the archive of your platform from the https://github.com/AdHoc-Protocol/AStyle/releases/latest[latest release]
+and put `astyle` (`astyle.exe`) in your `PATH`:
+
+[cols="1,2",options="header"]
+|===
+|Platform |File
+|Linux x64, arm64 |`astyle-<version>-linux-x64.tar.gz`, `astyle-<version>-linux-arm64.tar.gz`
+|Windows x64, arm64 |`astyle-<version>-windows-x64.zip`, `astyle-<version>-windows-arm64.zip` (no Visual C++ runtime needed)
+|macOS, Apple silicon and Intel |`astyle-<version>-macos-universal.tar.gz`
+|WebAssembly |`astyle-<version>-wasm.zip`: `astyle.wasm` and its loader for browsers and Node.js
+|===
+
+`SHA256SUMS` lists the checksums of the files. Every binary is tested on its platform before a release.
+
+== Usage
+
+[source,sh]
+----
+astyle --style=allman --pad-oper src/*.cpp        # formats the files in place, keeps .orig backups
+astyle --suffix=none --recursive "src/*.ts"       # all the TypeScript files of the directory tree, no backups
+astyle --mode=rust < main.rs > formatted.rs       # a filter: the language from --mode
+astyle --dry-run --error-on-changes -R "*.go"     # in a CI: fails if a file is not formatted
+astyle --help
+----
+
+The options can also be in an option file, one per line without the dashes, e.g. from the configurator:
+
+[source,ini]
+----
+# .astylerc
+style=java
+indent=spaces=2
+pad-oper
+pad-header
+----
+
+The default option file is `$HOME/.astylerc` (`%APPDATA%\astylerc` on Windows). With `--project`, the option file
+`.astylerc` of the top directory of the project is used. The
+https://adhoc-protocol.github.io/AStyle/doc/astyle.html[documentation] describes every option.
+
+== The style configurator
+
+https://adhoc-protocol.github.io/AStyle/[The configurator] shows how the options format the code of every language:
+
+* *hover to preview*: hovering an option, or a value of a list, shows the code formatted with it, the changed lines highlighted;
+* *the effect on your code*: every option and every value shows how many lines it changes, "Affects code" hides the others;
+* *detect from code*: finds the options that keep your code as it is, as "Detect code style" of Rider;
+* *start from* the settings of Prettier, Rider, IntelliJ, Google, Linux, gofmt or rustfmt;
+* the result, side by side, or a diff; paste or open your own code;
+* the `.astylerc` and the command line, to copy or download; import of an option file or a command line;
+* a link to share the settings and the code.
+
+astyle runs in the page as WebAssembly: the configurator is a static site, nothing is installed and the code
+stays in your browser.
+
+=== On your computer
+
+To use the configurator without an internet connection, only https://nodejs.org[Node.js] 18+ is needed, as a local
+web server (the browsers do not run the WebAssembly of a page opened as a file):
+
+. download `astyle-playground-<version>.zip` from the https://github.com/AdHoc-Protocol/AStyle/releases/latest[latest release] and unpack it;
+. run `node serve.js` in it;
+. open http://127.0.0.1:8080/.
+
+Any static web server works as well, the directory is the whole site.
+
+=== From the sources
+
+To try changes of astyle in the configurator, build astyle for WebAssembly. Nothing is installed, the archives of
+https://github.com/WebAssembly/wasi-sdk/releases[wasi-sdk] are only unpacked:
+
+[source,sh]
+----
+# the full SDK with its own clang, e.g. wasi-sdk-34.0-x86_64-windows.tar.gz, -x86_64-linux, -arm64-macos
+WASI_SDK_ROOT=../wasi-sdk/wasi-sdk-34.0-x86_64-windows sh web/wasm/build.sh
+# or with an installed clang 21+: wasi-sysroot-34.0.tar.gz and libclang_rt-34.0.tar.gz unpacked in ../wasi-sdk
+sh web/wasm/build.sh
+
+node web/server.js        # http://127.0.0.1:8080/, the page is served from web/public, a reload shows the changes
+node web/build-site.js    # the static site in web/dist, as it is published
+----
+
+Instead of building it, `astyle.wasm` of `astyle-<version>-wasm.zip` can be copied to `web/public/`.
+`web/README.md` describes the configurator, its structure and its tests.
+
+== Build
+
+A C++17 compiler is all it needs:
+
+[source,sh]
+----
+g++ -std=c++17 -O2 AStyle/src/*.cpp -o astyle                  # or clang++
+cl /O2 /EHsc /std:c++17 /utf-8 /MT AStyle\src\*.cpp /Fe:astyle.exe shell32.lib
+cmake -S AStyle -B build && cmake --build build
+----
+
+There are also the Makefiles of `AStyle/build/{gcc,clang,intel,mac}`, the Visual Studio 2022 projects of
+`AStyle/build/vs2022` and the Xcode projects of `AStyle/build/xcode`.
+
+== What is new in this fork
+
+Compared to Artistic Style 3.6.19:
+
+* *A lexer pass* (`AStyle/src/ASLexer.cpp`) protects every literal: template literals, regular expressions, JSX, raw,
+  verbatim and interpolated strings, text blocks, Rust lifetimes, multi-line strings. It recognizes the statements
+  ended by a line break (JavaScript, TypeScript, Go, Kotlin, Swift) and the conditions without parens (Go, Rust, Swift).
+* *The new languages*: TypeScript/TSX, JSX, Go, Rust, Kotlin, Swift and Dart, with the modes `ts`, `tsx`, `jsx`, `go`,
+  `rust`, `kotlin`, `swift`, `dart`.
+* *`--block-continuation` / `--align-continuation`*: continuation lines one indent from the statement, as Prettier and
+  gofmt do (the default for JavaScript, TypeScript and the new languages), or aligned with a paren or an assignment.
+* *C#*: switch expressions, records, `with` and `new` initializers, one-line auto-properties and accessors, raw strings.
+* *JavaScript and TypeScript*: object literals, arrow functions, type annotations, `===`, `??=`, `?.`, `**`, `...`,
+  keywords used as property names; JSX re-indented by its structure.
+* *Generics spanning lines* (`fn f<` ... `>(`) are indented like parens; Go composite literals `[]T{{` and Rust macros
+  `=> {{` add one indent only.
+* *Java*: arrow case labels (`case 1 -> {`, `default ->`), text blocks, compact record constructors.
+* *The library builds* also parse `squeeze-ws`, `preserve-ws`, `pad-brackets` and `indent-lambda`.
+
+C, C++ and Objective-C are formatted exactly as by Artistic Style 3.6.19.
+
+== Tests
+
+[source,sh]
+----
+node tests/run-tests.js                # the golden files of tests/cases, every language
+sh tests/tools/check-all.sh            # and the corpus checks
+node web/test/wasm-compare.js          # the WebAssembly build formats as the native program
+----
+
+The corpus checks compare C/C++ with an upstream build byte for byte, the tokens of C# with Roslyn and of TypeScript
+with the TypeScript parser, and check that formatting twice changes nothing.
+The workflows run the golden tests, the WebAssembly comparison and the configurator in headless Chrome on every push.
+
+== Credits and license
+
+Artistic Style was written by Tal Davidson, maintained by Jim Pattee and now by André Simon:
+https://astyle.sourceforge.net, https://gitlab.com/saalen/astyle.
+This fork is released under the same link:AStyle/LICENSE.md[MIT License].

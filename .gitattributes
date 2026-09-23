@@ -1,0 +1,2 @@
+# shell scripts run on Linux and in Git Bash, they keep LF line ends
+*.sh text eol=lf

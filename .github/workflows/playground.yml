@@ -1,0 +1,92 @@
+# The AStyle playground on GitHub Pages.
+#
+# Builds astyle for WebAssembly with wasi-sdk (only unpacked, nothing is installed),
+# checks that it formats as the native program, tests the page in headless Chrome,
+# and publishes the static site on a push to the default branch.
+#
+# The repository needs Settings > Pages > Source: GitHub Actions.
+
+name: Playground
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playground-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  WASI_SDK_VERSION: "34"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the native astyle
+        run: |
+          mkdir -p build-local
+          g++ -std=c++17 -O2 AStyle/src/*.cpp -o build-local/astyle
+
+      - name: Golden tests
+        run: node tests/run-tests.js
+
+      - name: Cache wasi-sdk
+        id: wasi-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/wasi-sdk
+          key: wasi-sdk-${{ env.WASI_SDK_VERSION }}-linux-x86_64
+
+      - name: Download wasi-sdk
+        if: steps.wasi-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/wasi-sdk"
+          curl -sSfL "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION}/wasi-sdk-${WASI_SDK_VERSION}.0-x86_64-linux.tar.gz" \
+            | tar xz -C "$RUNNER_TEMP/wasi-sdk" --strip-components=1
+
+      - name: Build astyle for WebAssembly
+        run: WASI_SDK_ROOT="$RUNNER_TEMP/wasi-sdk" sh web/wasm/build.sh
+
+      - name: The WebAssembly build formats as the native program
+        run: node web/test/wasm-compare.js
+
+      - name: Unit tests of the playground
+        working-directory: web
+        run: npm test
+
+      - name: End-to-end test in headless Chrome
+        run: node web/test/e2e.js
+
+      - name: Build the site
+        run: node web/build-site.js
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,23 @@
+.DS_Store
+Thumbs.db
+
+# the builds
+build-local/
+AStyle/build_local/
+AStyle/build/*/bin/
+AStyle/build/*/obj/
+AStyle/build/*/objs/
+
+# the editors
+AStyle/src/.idea/
+AStyle/.ccls-cache/
+AStyle/.vscode/
+
+# the playground: the WebAssembly build and the static site, built by web/wasm/build.sh and web/build-site.js
+web/public/astyle.wasm
+web/dist/
+
+# the builds of the tools of the tests, the scratch inputs
+tests/tools/cstokens/bin/
+tests/tools/cstokens/obj/
+tests/probe/

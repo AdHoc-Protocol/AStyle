@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>AStyle Playground</title>
+	<meta name="description" content="Try the Artistic Style formatting options on C, C++, C#, Java, JavaScript, TypeScript, Go, Rust, Kotlin, Swift and Dart code.">
+	<link rel="icon" href="favicon.svg" type="image/svg+xml">
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<header class="topbar">
+		<a class="brand" href="./" title="AStyle Playground">
+			<img src="favicon.svg" alt="" width="22" height="22">
+			<span class="brand-name">AStyle</span><span class="brand-sub">Playground</span>
+		</a>
+		<nav id="langs" class="langs" aria-label="Language"></nav>
+		<div class="actions">
+			<button id="detect" class="btn accent" title="Find the options that keep the input code as it is (as Rider's 'Detect code style')">
+				<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7 1.5l1.2 3.3L11.5 6 8.2 7.2 7 10.5 5.8 7.2 2.5 6l3.3-1.2zM12.5 9l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>
+				Detect from code
+			</button>
+			<button id="import" class="btn" title="Import an option file (.astylerc) or a command line">Import</button>
+			<button id="share" class="btn" title="Copy a link to these settings and this code">Share</button>
+			<button id="theme" class="btn icon" title="Switch the theme" aria-label="Switch the theme">
+				<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 12.5v-11a5.5 5.5 0 0 1 0 11z"/></svg>
+			</button>
+		</div>
+	</header>
+
+	<main class="layout">
+		<aside class="sidebar" aria-label="Options">
+			<div class="sidebar-head">
+				<label class="scheme" title="Start from the settings of a well-known formatter, as 'Set from...' in the IDEs">
+					<span>Start from</span>
+					<select id="preset"></select>
+				</label>
+				<div class="search">
+					<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.7 10.3l3 3-1.4 1.4-3-3a6 6 0 1 1 1.4-1.4zM6.5 11a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9z"/></svg>
+					<input id="search" type="search" placeholder="Search options   /" autocomplete="off" spellcheck="false">
+				</div>
+				<div class="filters" role="radiogroup" aria-label="Show">
+					<button data-filter="all" class="chip active" role="radio" aria-checked="true">All</button>
+					<button data-filter="affects" class="chip" role="radio" aria-checked="false" title="Only the options that change this code">Affects code</button>
+					<button data-filter="modified" class="chip" role="radio" aria-checked="false" title="Only the options that are not the default">Modified <span id="modifiedCount" class="count"></span></button>
+					<button id="resetAll" class="link" title="Reset all options to the defaults">Reset all</button>
+				</div>
+			</div>
+			<div id="optionList" class="option-list"></div>
+			<div id="help" class="help">
+				<div class="help-title">Hover an option to preview it</div>
+				<div class="help-text">The code shows how the option would change it. The numbers are the lines each option changes in this code.</div>
+			</div>
+		</aside>
+
+		<section class="workspace">
+			<div class="toolbar">
+				<div class="segmented" role="radiogroup" aria-label="View">
+					<button data-view="result" class="active">Result</button>
+					<button data-view="split">Side by side</button>
+					<button data-view="diff">Diff</button>
+				</div>
+				<div id="banner" class="banner" hidden></div>
+				<div class="tools">
+					<button id="editInput" class="btn small" title="Edit the input code">Edit input</button>
+					<button id="openFile" class="btn small" title="Open a source file">Open file…</button>
+					<button id="resetCode" class="btn small" title="Restore the sample code of the language">Sample</button>
+					<input id="fileInput" type="file" hidden>
+				</div>
+			</div>
+			<div id="panes" class="panes view-result">
+				<div class="pane input-pane">
+					<div class="pane-title"><span>Input</span><span id="inputInfo" class="muted"></span></div>
+					<div class="editor" id="editor">
+						<div class="gutter" id="inputGutter" aria-hidden="true"></div>
+						<div class="editor-body">
+							<pre class="backdrop" id="backdrop" aria-hidden="true"></pre>
+							<textarea id="input" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-label="Input code"></textarea>
+						</div>
+					</div>
+				</div>
+				<div class="pane output-pane">
+					<div class="pane-title"><span id="outputTitle">Formatted</span><span id="outputInfo" class="muted"></span></div>
+					<div id="output" class="code" tabindex="0" aria-label="Formatted code"></div>
+				</div>
+			</div>
+			<footer class="status" id="status" aria-live="polite"></footer>
+		</section>
+
+		<aside class="config" aria-label="Configuration">
+			<section>
+				<div class="config-head">
+					<h2>.astylerc</h2>
+					<div>
+						<button class="btn small" data-copy="optionFile">Copy</button>
+						<button class="btn small" id="download">Download</button>
+					</div>
+				</div>
+				<pre id="optionFile" class="config-text"></pre>
+			</section>
+			<section>
+				<div class="config-head">
+					<h2>Command line</h2>
+					<button class="btn small" data-copy="cmdline">Copy</button>
+				</div>
+				<pre id="cmdline" class="config-text wrap"></pre>
+			</section>
+			<section class="about">
+				<h2>About</h2>
+				<p id="version" class="muted"></p>
+				<p class="muted">The code is formatted in this browser by astyle compiled to WebAssembly, nothing is sent anywhere. The settings and the code are kept in this browser; a shared link contains them.</p>
+				<p><a href="doc/astyle.html" target="_blank" rel="noopener">Documentation of the options</a></p>
+			</section>
+		</aside>
+	</main>
+
+	<dialog id="importDialog" class="dialog">
+		<form method="dialog">
+			<h2>Import options</h2>
+			<p class="muted">Paste an option file (.astylerc, one option per line) or a command line.</p>
+			<textarea id="importText" rows="10" spellcheck="false" placeholder="style=allman&#10;indent=spaces=4&#10;pad-oper"></textarea>
+			<div class="dialog-row">
+				<button type="button" class="btn" id="importFile">Choose file…</button>
+				<input id="importFileInput" type="file" hidden>
+				<span class="spacer"></span>
+				<button value="cancel" class="btn">Cancel</button>
+				<button id="importApply" value="apply" class="btn accent">Apply</button>
+			</div>
+			<p id="importMessage" class="warning" hidden></p>
+		</form>
+	</dialog>
+
+	<div id="toast" class="toast" role="status" hidden></div>
+
+	<script src="lib/options.js"></script>
+	<script src="diff.js"></script>
+	<script src="highlight.js"></script>
+	<script src="engine.js"></script>
+	<script src="app.js"></script>
+</body>
+</html>

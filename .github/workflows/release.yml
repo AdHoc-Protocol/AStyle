@@ -1,0 +1,208 @@
+# Release: astyle for every platform, attached to a GitHub release.
+#
+#   git tag v3.6.19.1 && git push origin v3.6.19.1     # or run the workflow manually with a tag
+#
+# Every binary is built on its platform and checked by the golden tests before
+# the release is made. The assets:
+#   astyle-<tag>-linux-x64.tar.gz, astyle-<tag>-linux-arm64.tar.gz
+#   astyle-<tag>-windows-x64.zip, astyle-<tag>-windows-arm64.zip
+#   astyle-<tag>-macos-universal.tar.gz        (arm64 and x86_64)
+#   astyle-<tag>-wasm.zip                       (astyle.wasm and its JavaScript loader)
+#   astyle-playground-<tag>.zip                 (the style configurator, run it with: node serve.js)
+#   SHA256SUMS
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'The tag of the release, e.g. v3.6.19.1 (created on the current commit if missing)'
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  WASI_SDK_VERSION: "34"
+
+jobs:
+  unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # an older glibc, the binaries run on more distributions
+          - { os: ubuntu-22.04, platform: linux-x64 }
+          - { os: ubuntu-22.04-arm, platform: linux-arm64 }
+          - { os: macos-latest, platform: macos-universal }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build
+        run: |
+          mkdir -p build-local
+          if [ "$RUNNER_OS" = macOS ]; then
+            clang++ -std=c++17 -O2 -DNDEBUG -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 \
+              AStyle/src/*.cpp -o build-local/astyle
+          else
+            g++ -std=c++17 -O2 -DNDEBUG -static-libstdc++ -static-libgcc \
+              AStyle/src/*.cpp -o build-local/astyle
+          fi
+          strip build-local/astyle
+          build-local/astyle --version
+
+      - name: Golden tests
+        run: node tests/run-tests.js --bin build-local/astyle
+
+      - name: Package
+        run: |
+          name="astyle-$TAG-${{ matrix.platform }}"
+          mkdir -p "pkg/$name/doc"
+          cp build-local/astyle AStyle/LICENSE.md README.adoc "pkg/$name/"
+          cp AStyle/doc/astyle.html AStyle/doc/styles.css "pkg/$name/doc/"
+          cp AStyle/man/astyle.1 "pkg/$name/"
+          tar -C pkg -czf "$name.tar.gz" "$name"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}
+          path: astyle-*.tar.gz
+
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, arch: x64, platform: windows-x64 }
+          - { os: windows-11-arm, arch: arm64, platform: windows-arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+
+      - name: Build
+        shell: cmd
+        run: |
+          mkdir build-local obj
+          rem the static runtime, no Visual C++ Redistributable is needed
+          cl /nologo /O2 /DNDEBUG /EHsc /std:c++17 /utf-8 /MT /Foobj\ AStyle\src\*.cpp /Fe:build-local\astyle.exe /link shell32.lib || exit /b 1
+          build-local\astyle.exe --version
+
+      - name: Golden tests
+        run: node tests/run-tests.js --bin build-local/astyle.exe
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = "astyle-$env:TAG-${{ matrix.platform }}"
+          New-Item -ItemType Directory -Force "pkg/$name/doc" | Out-Null
+          Copy-Item build-local/astyle.exe, AStyle/LICENSE.md, README.adoc "pkg/$name/"
+          Copy-Item AStyle/doc/astyle.html, AStyle/doc/styles.css "pkg/$name/doc/"
+          Compress-Archive -Path "pkg/$name" -DestinationPath "$name.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}
+          path: astyle-*.zip
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the native astyle, for the comparison
+        run: |
+          mkdir -p build-local
+          g++ -std=c++17 -O2 AStyle/src/*.cpp -o build-local/astyle
+
+      - name: Download wasi-sdk
+        run: |
+          mkdir -p "$RUNNER_TEMP/wasi-sdk"
+          curl -sSfL "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION}/wasi-sdk-${WASI_SDK_VERSION}.0-x86_64-linux.tar.gz" \
+            | tar xz -C "$RUNNER_TEMP/wasi-sdk" --strip-components=1
+
+      - name: Build astyle for WebAssembly
+        run: WASI_SDK_ROOT="$RUNNER_TEMP/wasi-sdk" sh web/wasm/build.sh
+
+      - name: The WebAssembly build formats as the native program
+        run: node web/test/wasm-compare.js
+
+      - name: Package
+        run: |
+          wasm="astyle-$TAG-wasm"
+          mkdir -p "pkg/$wasm"
+          cp web/public/astyle.wasm web/public/astyle-wasm.js AStyle/LICENSE.md "pkg/$wasm/"
+          printf '%s\n' \
+            'astyle compiled to WebAssembly (WASI). In a page, a worker or Node.js:' '' \
+            '  const astyle = await AStyleWasm.load(bytesOrUrl);   // astyle-wasm.js' \
+            "  astyle.format(code, ['--mode=c', '--style=allman']) // { output } or { error }" \
+            > "pkg/$wasm/README.txt"
+          (cd pkg && zip -qr "../$wasm.zip" "$wasm")
+
+          node web/build-site.js "pkg/astyle-playground-$TAG"
+          (cd pkg && zip -qr "../astyle-playground-$TAG.zip" "astyle-playground-$TAG")
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm
+          path: '*.zip'
+
+  release:
+    needs: [unix, windows, wasm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: assets
+        run: sha256sum * > SHA256SUMS && cat SHA256SUMS
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="Artistic Style for Linux (x64, arm64), Windows (x64, arm64), macOS (universal) and WebAssembly.
+
+          The style configurator: https://adhoc-protocol.github.io/AStyle/
+          To run it on your computer, unpack astyle-playground-$TAG.zip and run \`node serve.js\` in it (Node.js 18+)."
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" assets/* --title "AStyle $TAG" --notes "$notes" --target "$GITHUB_SHA"
+            exit 0
+          fi
+          # A release made again replaces its files. The files are deleted by their ids
+          # first: "gh release upload --clobber" finds them through the release of the
+          # tag, whose list of files the API may return empty, and then fails with
+          # "already exists". The files of the release by its id are always listed.
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .id)
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$id/assets" --jq '.[] | "\(.id) \(.name)"' |
+            while read -r asset name; do
+              if [ -f "assets/$name" ]; then
+                echo "replacing $name"
+                gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$asset"
+              fi
+            done
+          gh release upload "$TAG" assets/*

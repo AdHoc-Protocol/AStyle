@@ -1,0 +1,19 @@
+{
+  "name": "astyle-playground",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A web page to try the Artistic Style formatting options on code, astyle runs in the browser as WebAssembly",
+  "license": "MIT",
+  "main": "server.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "wasm": "sh wasm/build.sh",
+    "site": "node build-site.js",
+    "test": "node --test test/unit.test.js",
+    "compare": "node test/wasm-compare.js",
+    "e2e": "node test/e2e.js"
+  }
+}
