@@ -6,62 +6,30 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
-    <title>Artistic Style</title>
-    <meta http-equiv="Content-Language" content="en-us" />
-    <meta http-equiv="Content-Type" content="text/html; charset=us-ascii" />
-    <meta name="description" content="Artistic Style is a source code indenter, source code formatter, and source code beautifier
-          for the C, C++, C# and Java programming languages." />
-    <meta name="keywords" content="artistic style, astyle, source code indenter, source code formatter, source code beautifier" />
+    <title>Artistic Style - Documentation</title>
+    <meta name="description" content="Artistic Style is a source code indenter, formatter and beautifier for C, C++, Objective-C, C#, Java,
+          JavaScript, TypeScript, JSX, Go, Rust, Kotlin, Swift and Dart." />
+    <meta name="keywords" content="artistic style, astyle, source code formatter, beautifier, indenter, C++, C#, Java, JavaScript, TypeScript, Go, Rust, Kotlin, Swift, Dart" />
+    <meta name="color-scheme" content="dark" />
     <link href="favicon.ico" rel="shortcut icon" type="image/x-icon" />
     <link href="styles.css" rel="stylesheet" type="text/css" />
-
-    <!--  the following styles are additions to styles.css -->
-
-    <style type="text/css">
-        hr { margin-left: -0.4in; }
-        /* the following styles are for formatting code samples */
-        div.code { }
-        /* code */
-        code { color: mediumblue; }
-        code.title { font-size: larger; font-weight: bold; }
-        /* spans */
-        span.brace { color: red; }
-        span.comment { color: dimgray; font-style: italic; }
-        span.option { color: saddlebrown; font-weight: bold; }
-
-        p.contents2 > a { margin-left: 2em; display: list-item;}
-    </style>
-
-    <!--  When the user scrolls down from the top of the document, show the button -->
-
-    <script type="text/javascript">
-        // the <button> is described in the <body> section
-        window.onscroll = function () { scrollFunction() };
-
-        // When the user scrolls down 400px from the top of the document, show the button
-        function scrollFunction() {
-            if (document.body.scrollTop > 400 || document.documentElement.scrollTop > 400) {
-                document.getElementById("topBtn").style.display = "block";
-            } else {
-                document.getElementById("topBtn").style.display = "none";
-            }
-        }
-
-        // When the user clicks on the button, scroll to the top of the document
-        // Changed to scroll to "Contents" instead of "Top".
-        function topFunction() {
-            //document.body.scrollTop = 0;
-            //document.documentElement.scrollTop = 0;
-            var scroll_element = document.getElementById("Contents");
-            scroll_element.scrollIntoView();
-        }
-    </script>
+    <script src="highlight.js" defer></script>
+    <script src="docs.js" defer></script>
 
 </head>
 
 <body id="Contents">
 
-    <div id="slogan">Artistic Style Manual</div>
+    <div id="slogan">Artistic Style
+        <span class="tagline">The source code formatter for thirteen languages. Every language is formatted the way its own
+            community formatter does, C, C++ and Objective-C exactly as always.</span>
+        <span class="chips"><span class="chip">C</span><span class="chip">C++</span><span class="chip">Objective-C</span><span class="chip">C#</span><span class="chip">Java</span><span class="chip">JavaScript</span><span class="chip new">TypeScript</span><span class="chip new">JSX / TSX</span><span class="chip new">Go</span><span class="chip new">Rust</span><span class="chip new">Kotlin</span><span class="chip new">Swift</span><span class="chip new">Dart</span></span>
+        <span class="actions">
+            <a class="button primary" href="https://adhoc-protocol.github.io/AStyle/">Open the style configurator</a>
+            <a class="button" href="https://github.com/AdHoc-Protocol/AStyle/releases/latest">Download</a>
+            <a class="button" href="https://github.com/AdHoc-Protocol/AStyle">GitHub</a>
+        </span>
+    </div>
     <button onclick="topFunction()" id="topBtn" title="Go to Contents"><span class="menu-arrow">&#9650;</span> <b>Top</b></button>
 
     <label for="responsive-button" class="responsive-button">Artistic Style Manual</label>
@@ -70,6 +38,16 @@
     <nav class="menu">
 
         <ul>
+              <li><a href="#_Languages">Languages <span class="menu-arrow">&#9660;</span></a>
+                  <ul>
+                      <li><a href="#_Languages">Languages</a></li>
+                      <li><a href="#_New_Features">What is new</a></li>
+                      <li><a href="#_Language_Examples">Examples</a></li>
+                      <li><a href="#_block-continuation">block-continuation</a></li>
+                      <li><a href="#_mode">mode</a></li>
+                  </ul>
+              </li>
+
               <li><a href="#_General_Information">Usage <span class="menu-arrow">&#9660;</span></a>
                   <ul>
                       <li><a href="#_Quick_Start">Quick Start</a></li>
@@ -260,6 +238,339 @@
 
         <div style="margin-left: 2em;margin-top: 1em;">
 
+    <h3 id="_Languages">Languages</h3>
+
+    <p>
+        Artistic Style formats thirteen languages. Every language is formatted the way its own community formatter does,
+        with the options of Artistic Style: the brace styles, the indentation, the padding, the blank lines and the line
+        length work for every language. C, C++ and Objective-C are formatted exactly as by Artistic Style 3.6.19.</p>
+
+    <table>
+        <tr><th>Language</th><th>Mode</th><th>Extensions</th><th>Formatted like</th></tr>
+        <tr><td>C, C++, C++/CLI</td><td><code>c</code></td><td><code>.c .h .cpp .hpp .cc .cxx ...</code></td><td>Artistic Style, byte for byte as always</td></tr>
+        <tr><td>Objective-C</td><td><code>objc</code></td><td><code>.m .mm</code></td><td>Artistic Style, byte for byte as always</td></tr>
+        <tr><td>C#</td><td><code>cs</code></td><td><code>.cs</code></td><td>Rider, with the modern C# syntax</td></tr>
+        <tr><td>Java</td><td><code>java</code></td><td><code>.java</code></td><td>Artistic Style, with records, text blocks, arrow switch labels</td></tr>
+        <tr><td>JavaScript, JSX</td><td><code>js, jsx</code></td><td><code>.js .mjs .cjs .jsx</code></td><td>Prettier</td></tr>
+        <tr><td>TypeScript, TSX</td><td><code>ts, tsx</code></td><td><code>.ts .mts .cts .tsx</code></td><td>Prettier</td></tr>
+        <tr><td>Go</td><td><code>go</code></td><td><code>.go</code></td><td>gofmt</td></tr>
+        <tr><td>Rust</td><td><code>rust</code></td><td><code>.rs</code></td><td>rustfmt</td></tr>
+        <tr><td>Kotlin</td><td><code>kotlin</code></td><td><code>.kt .kts</code></td><td>ktlint</td></tr>
+        <tr><td>Swift</td><td><code>swift</code></td><td><code>.swift</code></td><td>swift-format</td></tr>
+        <tr><td>Dart</td><td><code>dart</code></td><td><code>.dart</code></td><td>dart format</td></tr>
+    </table>
+
+    <div class="callout">
+        Try the options on your own code in the <a href="https://adhoc-protocol.github.io/AStyle/">style configurator</a>:
+        hover an option to see what it changes, detect the style of your code, and copy the <code>.astylerc</code>.
+    </div>
+
+    <h4 id="_New_Features">What is new</h4>
+
+    <div class="feature-grid">
+        <div class="feature"><span class="tag">lexer</span><h5>Literals are never changed</h5><p>Template literals, regular expressions, JSX, raw, verbatim and interpolated strings, text blocks, Rust lifetimes and multi-line strings are protected before the formatting.</p></div>
+        <div class="feature"><span class="tag">ASI</span><h5>Statements without semicolons</h5><p>JavaScript, TypeScript, Go, Kotlin and Swift statements ended by a line break are recognized, a line is not taken as the continuation of the next one.</p></div>
+        <div class="feature"><span class="tag">option</span><h5>Block continuation</h5><p>Continuation lines one indent from the statement, as Prettier and gofmt do: <a href="#_block-continuation">--block-continuation</a>, or aligned with <a href="#_align-continuation">--align-continuation</a>.</p></div>
+        <div class="feature"><span class="tag">jsx</span><h5>JSX by its structure</h5><p>The children of the elements, the attributes spanning lines and the embedded expressions are indented as Prettier does.</p></div>
+        <div class="feature"><span class="tag">ts rust kotlin</span><h5>Generics spanning lines</h5><p>Generic parameter lists as <code>fn f&lt;</code> ... <code>&gt;(</code> are indented like parens; Go <code>[]T{{</code> and Rust <code>=&gt; {{</code> add one indent.</p></div>
+        <div class="feature"><span class="tag">cs</span><h5>Modern C#</h5><p>Switch expressions, records, <code>with</code> and <code>new</code> initializers, one-line auto-properties and accessors, raw strings.</p></div>
+        <div class="feature"><span class="tag">java</span><h5>Modern Java</h5><p>Arrow case labels <code>case 1 -&gt; {</code> and <code>default -&gt;</code>, text blocks, compact record constructors.</p></div>
+        <div class="feature"><span class="tag">wasm</span><h5>In the browser</h5><p>A WebAssembly build formats exactly as the program: the <a href="https://adhoc-protocol.github.io/AStyle/">style configurator</a> shows every option on your code.</p></div>
+    </div>
+
+    <h4 id="_Language_Examples">Examples</h4>
+
+    <p>
+        The code before and after Artistic Style, the changed lines are marked.</p>
+
+    <p class="example-title">JSX <code>--mode=jsx --indent=spaces=2</code></p>
+    <div class="code" data-lang="jsx">
+        <pre>export const List = ({items}) =&gt; (
+&lt;ul&gt;
+{items.map(item =&gt; (
+&lt;li key={item.id}
+onClick={() =&gt; select(item)}&gt;
+{item.name}
+&lt;/li&gt;
+))}
+&lt;/ul&gt;
+);
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>export const List = ({items}) =&gt; (
+  &lt;ul&gt;
+    {items.map(item =&gt; (
+      &lt;li key={item.id}
+        onClick={() =&gt; select(item)}&gt;
+        {item.name}
+      &lt;/li&gt;
+    ))}
+  &lt;/ul&gt;
+);
+</pre>
+    </div>
+
+    <p class="example-title">TypeScript <code>--mode=ts --indent=spaces=2</code></p>
+    <div class="code" data-lang="ts">
+        <pre>type Handler&lt;
+TEvent extends Event,
+TResult = void,
+&gt; = (event: TEvent) =&gt; TResult;
+const total = items
+.filter(i =&gt; i.price &gt; 0)
+.reduce((sum, i) =&gt; sum + i.price, 0)
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>type Handler&lt;
+  TEvent extends Event,
+  TResult = void,
+&gt; = (event: TEvent) =&gt; TResult;
+const total = items
+  .filter(i =&gt; i.price &gt; 0)
+  .reduce((sum, i) =&gt; sum + i.price, 0)
+</pre>
+    </div>
+
+    <p class="example-title">C# <code>--mode=cs --style=allman --pad-oper</code></p>
+    <div class="code" data-lang="cs">
+        <pre>public decimal Discount(Order o) =&gt; o switch {
+{ Total: &gt; 1000 } =&gt; o.Total*0.1m,
+{ Vip: true } =&gt; 50,
+_ =&gt; 0
+};
+public string Name { get; set; }
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>public decimal Discount(Order o) =&gt; o switch {
+    { Total: &gt; 1000 } =&gt; o.Total * 0.1m,
+    { Vip: true } =&gt; 50,
+    _ =&gt; 0
+};
+public string Name { get; set; }
+</pre>
+    </div>
+
+    <p class="example-title">Go <code>--mode=go --indent=force-tab</code></p>
+    <div class="code" data-lang="go">
+        <pre>func main() {
+if err := run(); err != nil {
+log.Fatal(err)
+}
+tests := []struct{ in, want string }{{
+in: "a",
+want: "A",
+}}
+}
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+	tests := []struct{ in, want string }{{
+		in: "a",
+		want: "A",
+	}}
+}
+</pre>
+    </div>
+
+    <p class="example-title">Rust <code>--mode=rust</code></p>
+    <div class="code" data-lang="rust">
+        <pre>fn process&lt;
+T: Clone,
+U: Into&lt;String&gt;,
+&gt;(items: Vec&lt;T&gt;, label: U) -&gt; Vec&lt;T&gt; {
+let evens: Vec&lt;_&gt; = (0..10).filter(|x| x % 2 == 0).collect();
+match items.len() {
+0 =&gt; Vec::new(),
+_ =&gt; items,
+}
+}
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>fn process&lt;
+    T: Clone,
+    U: Into&lt;String&gt;,
+&gt;(items: Vec&lt;T&gt;, label: U) -&gt; Vec&lt;T&gt; {
+    let evens: Vec&lt;_&gt; = (0..10).filter(|x| x % 2 == 0).collect();
+    match items.len() {
+        0 =&gt; Vec::new(),
+        _ =&gt; items,
+    }
+}
+</pre>
+    </div>
+
+    <p class="example-title">Kotlin <code>--mode=kotlin</code></p>
+    <div class="code" data-lang="kotlin">
+        <pre>fun describe(r: Result&lt;User&gt;): String = when (r) {
+is Success -&gt; "ok ${r.value.name}"
+Loading -&gt; "loading"
+}
+fun load(ids: List&lt;Int&gt;) {
+ids.filter { it &gt; 0 }.forEach { id -&gt;
+cache[id] = repo.load(id)
+}
+}
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>fun describe(r: Result&lt;User&gt;): String = when (r) {
+    is Success -&gt; "ok ${r.value.name}"
+    Loading -&gt; "loading"
+}
+fun load(ids: List&lt;Int&gt;) {
+    ids.filter { it &gt; 0 }.forEach { id -&gt;
+        cache[id] = repo.load(id)
+    }
+}
+</pre>
+    </div>
+
+    <p class="example-title">JavaScript <code>--mode=js --indent=spaces=2 --pad-oper --pad-header</code><br /><span class="example-note">the literals are kept, a regular expression or a template literal with braces does not confuse the formatting; statements without semicolons</span></p>
+    <div class="code" data-lang="js">
+        <pre>const pattern = /[{}]+/g
+const html = `&lt;div class="${cls}"&gt;{ ${title} }&lt;/div&gt;`
+function render(items){
+if(!items.length) return ""
+return items.map(i=&gt;`&lt;li&gt;${i}&lt;/li&gt;`).join("")
+}
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>const pattern = /[{}]+/g
+const html = `&lt;div class="${cls}"&gt;{ ${title} }&lt;/div&gt;`
+function render(items) {
+  if (!items.length) return ""
+  return items.map(i =&gt; `&lt;li&gt;${i}&lt;/li&gt;`).join("")
+}
+</pre>
+    </div>
+
+    <p class="example-title">Swift <code>--mode=swift</code><br /><span class="example-note">guard ... else, trailing closures with their parameters, the case labels as swift-format</span></p>
+    <div class="code" data-lang="swift">
+        <pre>func load(completion: @escaping (Data?) -&gt; Void) {
+guard let url = URL(string: address) else {
+return
+}
+session.dataTask(with: url) { data, _, error in
+completion(data)
+}.resume()
+switch status {
+case .ok: print("done")
+default: break
+}
+}
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>func load(completion: @escaping (Data?) -&gt; Void) {
+    guard let url = URL(string: address) else {
+        return
+    }
+    session.dataTask(with: url) { data, _, error in
+        completion(data)
+    }.resume()
+    switch status {
+    case .ok: print("done")
+    default: break
+    }
+}
+</pre>
+    </div>
+
+    <p class="example-title">Dart <code>--mode=dart --indent=spaces=2</code><br /><span class="example-note">a widget tree, every paren or bracket ending a line opens an indented block, as dart format</span></p>
+    <div class="code" data-lang="dart">
+        <pre>Widget build(BuildContext context) {
+return Scaffold(
+body: Center(
+child: Column(
+children: [
+Text("Count: $_count"),
+ElevatedButton(onPressed: _increment, child: const Text("+")),
+],
+),
+),
+);
+}
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>Widget build(BuildContext context) {
+  return Scaffold(
+    body: Center(
+      child: Column(
+        children: [
+          Text("Count: $_count"),
+          ElevatedButton(onPressed: _increment, child: const Text("+")),
+        ],
+      ),
+    ),
+  );
+}
+</pre>
+    </div>
+
+    <p class="example-title">Java <code>--mode=java --indent-switches</code><br /><span class="example-note">a switch expression with arrow case labels, a block and a guard</span></p>
+    <div class="code" data-lang="java">
+        <pre>String describe(Object o) {
+return switch (o) {
+case Integer i when i &gt; 10 -&gt; "big";
+case String s -&gt; {
+String t = s.trim();
+yield t;
+}
+default -&gt; "other";
+};
+}
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>String describe(Object o) {
+    return switch (o) {
+        case Integer i when i &gt; 10 -&gt; "big";
+        case String s -&gt; {
+            String t = s.trim();
+            yield t;
+        }
+        default -&gt; "other";
+    };
+}
+</pre>
+    </div>
+
+    <p class="example-title">C# <code>--mode=cs --style=allman</code><br /><span class="example-note">a record, an interpolated raw string literal kept as it is, a with expression</span></p>
+    <div class="code" data-lang="cs">
+        <pre>public record Point(int X, int Y) {
+public double Length =&gt; Math.Sqrt(X * X + Y * Y);
+}
+var json = $"""
+    {"x": {p.X}}
+    """;
+var moved = p with { X = 1 };
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>public record Point(int X, int Y)
+{
+    public double Length =&gt; Math.Sqrt(X * X + Y * Y);
+}
+var json = $"""
+    {"x": {p.X}}
+    """;
+var moved = p with { X = 1 };
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
+
     <h3 id="_General_Information">General Information</h3>
 
     <h4>Line Endings</h4>
@@ -271,9 +582,12 @@
     <h4>File Type</h4>
 
     <p>
-        Artistic Style will determine the file type from the file extension. The extension ".java" indicates a Java file,
-        and ".cs" indicates a C# file. Everything else is a C type file (C, C++, C++/CLI, or <span style="white-space: nowrap;">Objective-C</span>). If you are
-        using a non-standard file extension for Java or C#, use one of the --mode= options.</p>
+        Artistic Style determines the language from the file extension: <code>.java</code> Java, <code>.cs</code> C#,
+        <code>.js .mjs .cjs .jsx</code> JavaScript, <code>.ts .mts .cts .tsx</code> TypeScript, <code>.go</code> Go,
+        <code>.rs</code> Rust, <code>.kt .kts</code> Kotlin, <code>.swift</code> Swift and <code>.dart</code> Dart.
+        Everything else is a C type file (C, C++, C++/CLI, or <span style="white-space: nowrap;">Objective-C</span>).
+        With <a href="#_stdin=">--stdin=</a> the extension of the given file name is used. If you are using a
+        non-standard file extension, use one of the <a href="#_mode">--mode=</a> options.</p>
 
     <h4>Wildcards and Recursion</h4>
 

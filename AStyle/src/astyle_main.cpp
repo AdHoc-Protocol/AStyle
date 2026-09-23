@@ -39,6 +39,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <clocale>		// needed by some compilers
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
@@ -4623,11 +4624,149 @@ extern "C" EXPORT const char* STDCALL AStyleGetVersion(void)
 #elif !defined(ASTYLECON_LIB)
 
 //----------------------------------------------------------------------------
+// the welcome of a start without arguments
+//----------------------------------------------------------------------------
+
+namespace
+{
+// Is the stream a terminal, not a file or a pipe.
+// ASTYLE_WELCOME=1 in the environment makes both streams terminals, for the tests.
+bool isTerminal(FILE* stream)
+{
+	const char* forced = std::getenv("ASTYLE_WELCOME");
+	if (forced != nullptr && std::string(forced) == "1")
+		return true;
+#ifdef _WIN32
+	return _isatty(_fileno(stream)) != 0;
+#else
+	return isatty(fileno(stream)) != 0;
+#endif
+}
+
+// Show how to use astyle when it is started without arguments from a terminal,
+// or by a double click, instead of waiting silently for the input.
+void printWelcome()
+{
+	bool color = std::getenv("NO_COLOR") == nullptr && isTerminal(stdout);
+	bool ownConsole = false;
+#ifdef _WIN32
+	#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
+		#define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
+	#endif
+	HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+	DWORD mode = 0;
+	bool isConsole = GetConsoleMode(output, &mode) != 0;
+	if (color && isConsole)
+		color = SetConsoleMode(output, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0;
+	UINT codePage = GetConsoleOutputCP();
+	if (isConsole)
+		SetConsoleOutputCP(CP_UTF8);
+	// the console was made for this process only, e.g. by a double click in Explorer
+	DWORD processes[2];
+	ownConsole = isConsole && GetConsoleProcessList(processes, 2) == 1;
+#endif
+
+	auto style = [color](const char* code) { return color ? code : ""; };
+	const char* reset = style("\033[0m");
+	const char* bold = style("\033[1m");
+	const char* dim = style("\033[2m");
+	const char* title = style("\033[1;38;5;75m");
+	const char* heading = style("\033[1;38;5;214m");
+	const char* command = style("\033[38;5;114m");
+	const char* option = style("\033[38;5;180m");
+	const char* link = style("\033[4;38;5;75m");
+
+	// a line of a two column list, the second column aligned
+	auto row = [&](const char* colorCode, const std::string& left, const std::string& right, size_t width)
+	{
+		std::string padding = left.length() < width ? std::string(width - left.length(), ' ') : std::string(" ");
+		std::cout << "    " << colorCode << left << reset << padding << dim << right << reset << '\n';
+	};
+
+	std::string version = std::string("Artistic Style ") + g_version;
+	const size_t boxWidth = 66;
+	auto boxLine = [&](const std::string& text, const char* colorCode)
+	{
+		std::cout << "  " << dim << "│" << reset << "  " << colorCode << text << reset
+		          << std::string(boxWidth - 2 - text.length(), ' ') << dim << "│" << reset << '\n';
+	};
+	std::string rule;
+	for (size_t i = 0; i < boxWidth; i++)
+		rule += "─";
+
+	std::cout << '\n';
+	std::cout << "  " << dim << "╭" << rule << "╮" << reset << '\n';
+	boxLine(version + "  -  the source code formatter", title);
+	boxLine("", "");
+	boxLine("C, C++, Objective-C, C#, Java, JavaScript, TypeScript, JSX,", "");
+	boxLine("Go, Rust, Kotlin, Swift and Dart", "");
+	std::cout << "  " << dim << "╰" << rule << "╯" << reset << "\n\n";
+
+	std::cout << "  " << bold << "astyle is a command line program, it has no window of its own." << reset << '\n';
+	std::cout << "  Run it in a terminal (PowerShell, cmd, bash) with options and files:\n\n";
+
+	const size_t width = 52;
+	std::cout << "  " << heading << "FORMAT FILES" << reset << '\n';
+	row(command, "astyle --style=allman --pad-oper src/*.cpp", "in place, keeps .orig backups", width);
+	row(command, "astyle --suffix=none --recursive \"src/*.ts\"", "a directory tree, no backups", width);
+	row(command, "astyle --project --recursive \"*.go\"", "with the .astylerc of the project", width);
+	std::cout << '\n';
+
+	std::cout << "  " << heading << "AS A FILTER" << reset << '\n';
+	row(command, "astyle --mode=rust < main.rs > formatted.rs", "the language from --mode", width);
+	std::cout << '\n';
+
+	std::cout << "  " << heading << "CHECK IN A CI" << reset << '\n';
+	row(command, "astyle --dry-run --error-on-changes -R \"*.cs\"", "fails if a file is not formatted", width);
+	std::cout << '\n';
+
+	std::cout << "  " << heading << "POPULAR OPTIONS" << reset << '\n';
+	row(option, "--style=allman | java | kr | google | linux", "the brace style", width);
+	row(option, "--indent=spaces=4 | --indent=tab", "the indentation", width);
+	row(option, "--pad-oper  --pad-header  --pad-comma", "spaces around operators, after keywords and commas", width);
+	row(option, "--indent-switches", "indent the case labels", width);
+	row(option, "--max-code-length=100", "break the long lines", width);
+	row(option, "--mode=c | cs | java | js | ts | go | rust ...", "when the file suffix does not tell", width);
+	std::cout << '\n';
+
+	std::cout << "  " << heading << "CONFIGURE THE STYLE ONLINE" << reset << '\n';
+	std::cout << "    " << link << "https://adhoc-protocol.github.io/AStyle/" << reset << '\n';
+	std::cout << "    " << dim << "try the options on your code, then copy the .astylerc or the command line" << reset << "\n\n";
+
+	std::cout << "  " << heading << "MORE" << reset << '\n';
+	row(command, "astyle --help", "every option", width);
+	row(command, "astyle --version", "", width);
+	std::cout << "    " << link << "https://github.com/AdHoc-Protocol/AStyle" << reset << "\n\n";
+	std::cout.flush();
+
+#ifdef _WIN32
+	if (ownConsole)
+	{
+		std::cout << "  " << dim << "Press Enter to close this window." << reset;
+		std::cout.flush();
+		std::cin.get();
+	}
+	if (isConsole)
+		SetConsoleOutputCP(codePage);
+#endif
+	(void) ownConsole;
+}
+}   // anonymous namespace
+
+//----------------------------------------------------------------------------
 // main function for ASConsole build
 //----------------------------------------------------------------------------
 
 int main(int argc, char** argv)
 {
+	// without arguments from a terminal or a double click, the program would wait
+	// silently for the code on the standard input: show how to use it instead
+	if (argc == 1 && isTerminal(stdin))
+	{
+		printWelcome();
+		return EXIT_SUCCESS;
+	}
+
 	// create objects
 	ASFormatter formatter;
 	std::unique_ptr<ASConsole> console(new ASConsole(formatter));

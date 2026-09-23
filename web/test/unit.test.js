@@ -125,6 +125,15 @@ test('the changed lines are the lines of the new text', () => {
 	assert.strictEqual(changedLines('same\n', 'same\n').count, 0);
 });
 
+// ------------------------------------------------------------------ documentation
+
+test('the documentation has the highlighter of the configurator', () => {
+	const web = fs.readFileSync(path.join(__dirname, '..', 'public', 'highlight.js'), 'utf8');
+	const doc = fs.readFileSync(path.join(__dirname, '..', '..', 'AStyle', 'doc', 'highlight.js'), 'utf8');
+	assert.strictEqual(doc.replace(/\r\n/g, '\n'), web.replace(/\r\n/g, '\n'),
+		'AStyle/doc/highlight.js must be a copy of web/public/highlight.js');
+});
+
 // ------------------------------------------------------------------ server
 
 async function withServer(fn) {

@@ -30,6 +30,8 @@ file(GLOB SRCS src/*.cpp)
 # AStyle Documentation, selected files
 list(APPEND DOCS
     doc/astyle.html
+    doc/docs.js
+    doc/highlight.js
     doc/install.html
     doc/news.html
     doc/notes.html

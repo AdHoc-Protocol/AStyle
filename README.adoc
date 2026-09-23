@@ -257,6 +257,10 @@ Compared to Artistic Style 3.6.19:
   `=> {{` add one indent only.
 * *Java*: arrow case labels (`case 1 -> {`, `default ->`), text blocks, compact record constructors.
 * *The library builds* also parse `squeeze-ws`, `preserve-ws`, `pad-brackets` and `indent-lambda`.
+* *A welcome*: `astyle` started without arguments, e.g. by a double click, shows how to use it, in color, instead of
+  waiting silently for the input. `NO_COLOR` turns the colors off.
+* *The documentation* (https://adhoc-protocol.github.io/AStyle/doc/astyle.html[online], `doc/` of a release): a dark
+  theme, the examples highlighted with the lines every option changes, the languages with examples.
 
 C, C++ and Objective-C are formatted exactly as by Artistic Style 3.6.19.
 

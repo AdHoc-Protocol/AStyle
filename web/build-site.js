@@ -40,7 +40,7 @@ copy(path.join(web, 'public'), out);
 for (const file of ['options.js', 'analysis.js'])
 	copy(path.join(web, 'lib', file), path.join(out, 'lib', file));
 copy(path.join(web, 'samples'), path.join(out, 'samples'));
-for (const file of ['astyle.html', 'styles.css', 'favicon.ico'])
+for (const file of ['astyle.html', 'styles.css', 'docs.js', 'highlight.js', 'favicon.ico'])
 	copy(path.join(repo, 'AStyle', 'doc', file), path.join(out, 'doc', file));
 // a static server to run the site on this computer: node serve.js
 copy(path.join(web, 'serve.js'), path.join(out, 'serve.js'));

@@ -66,8 +66,8 @@ jobs:
         run: |
           name="astyle-$TAG-${{ matrix.platform }}"
           mkdir -p "pkg/$name/doc"
-          cp build-local/astyle AStyle/LICENSE.md README.adoc "pkg/$name/"
-          cp AStyle/doc/astyle.html AStyle/doc/styles.css "pkg/$name/doc/"
+          cp build-local/astyle AStyle/LICENSE.md README.md "pkg/$name/"
+          cp AStyle/doc/astyle.html AStyle/doc/styles.css AStyle/doc/docs.js AStyle/doc/highlight.js AStyle/doc/favicon.ico "pkg/$name/doc/"
           cp AStyle/man/astyle.1 "pkg/$name/"
           tar -C pkg -czf "$name.tar.gz" "$name"
 
@@ -110,8 +110,8 @@ jobs:
         run: |
           $name = "astyle-$env:TAG-${{ matrix.platform }}"
           New-Item -ItemType Directory -Force "pkg/$name/doc" | Out-Null
-          Copy-Item build-local/astyle.exe, AStyle/LICENSE.md, README.adoc "pkg/$name/"
-          Copy-Item AStyle/doc/astyle.html, AStyle/doc/styles.css "pkg/$name/doc/"
+          Copy-Item build-local/astyle.exe, AStyle/LICENSE.md, README.md "pkg/$name/"
+          Copy-Item AStyle/doc/astyle.html, AStyle/doc/styles.css, AStyle/doc/docs.js, AStyle/doc/highlight.js, AStyle/doc/favicon.ico "pkg/$name/doc/"
           Compress-Archive -Path "pkg/$name" -DestinationPath "$name.zip"
 
       - uses: actions/upload-artifact@v4
