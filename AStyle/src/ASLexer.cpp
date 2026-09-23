@@ -2603,8 +2603,10 @@ std::string ASLexer::Terminator::insertIndentRegions()
 	std::vector<std::pair<size_t, std::string>> inserts;
 	std::vector<std::pair<size_t, size_t>> erases;      // the ranges of the source removed
 	const std::string open = std::string(" ") + VIRTUAL_BRACE + "{";
-	// the marker follows a closing brace, its line begins with the brace as a real one
-	const std::string close = std::string("\n}") + VIRTUAL_BRACE;
+	// the marker follows a closing brace, its line begins with the brace as a real one,
+	// the line ends as the lines of the source
+	const std::string eol = src.find("\r\n") != npos ? "\r\n" : "\n";
+	const std::string close = eol + "}" + VIRTUAL_BRACE;
 
 	size_t previous = npos;         // the previous line of code
 	// the end of the last line of a region before the line, a line comment indented
