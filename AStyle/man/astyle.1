@@ -248,6 +248,17 @@ Scala: one space before and after a type colon, x : Int.
 .IP "--pad-type-colon=none"
 Scala: no space around a type colon, x:Int.
 
+.IP "--pad-closure-braces, --pad-closure-braces=none"
+Scala: insert or remove the spaces inside the braces of a one-line lambda, { x => x }.
+.IP "--pad-block-braces, --pad-block-braces=none"
+Scala: insert or remove the spaces inside the braces of another one-line block, { a }.
+.IP "--pad-import-braces, --pad-import-braces=none"
+Scala: insert or remove the spaces inside the braces of import selectors, import a.{ B, C }.
+.IP "--pad-brace-call, --pad-brace-call=none"
+Scala: insert or remove the space before the brace of a method call, xs.foreach { x => f(x) }.
+.IP "--pad-pattern-at, --pad-pattern-at=none"
+Scala: insert or remove the spaces around the @ of a pattern, case x @ Some(y).
+
 .IP "--pad-paren OR -P"
 Insert space padding around parenthesis on both the outside and
 the inside.

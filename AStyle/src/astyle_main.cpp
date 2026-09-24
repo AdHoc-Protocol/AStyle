@@ -2111,6 +2111,26 @@ void ASConsole::printHelp() const
 	std::cout << "    --pad-type-colon=none\n";
 	std::cout << "    Scala: no space around a type colon, x:Int.\n";
 	std::cout << '\n';
+	std::cout << "    --pad-closure-braces  OR  --pad-closure-braces=none\n";
+	std::cout << "    Scala: insert or remove the spaces inside the braces of a one-line\n";
+	std::cout << "    lambda, { x => x }.\n";
+	std::cout << '\n';
+	std::cout << "    --pad-block-braces  OR  --pad-block-braces=none\n";
+	std::cout << "    Scala: insert or remove the spaces inside the braces of another\n";
+	std::cout << "    one-line block, { a }.\n";
+	std::cout << '\n';
+	std::cout << "    --pad-import-braces  OR  --pad-import-braces=none\n";
+	std::cout << "    Scala: insert or remove the spaces inside the braces of import\n";
+	std::cout << "    selectors, import a.{ B, C }.\n";
+	std::cout << '\n';
+	std::cout << "    --pad-brace-call  OR  --pad-brace-call=none\n";
+	std::cout << "    Scala: insert or remove the space before the brace of a method\n";
+	std::cout << "    call, xs.foreach { x => f(x) }.\n";
+	std::cout << '\n';
+	std::cout << "    --pad-pattern-at  OR  --pad-pattern-at=none\n";
+	std::cout << "    Scala: insert or remove the spaces around the @ of a pattern,\n";
+	std::cout << "    case x @ Some(y).\n";
+	std::cout << '\n';
 	std::cout << "    --pad-paren  OR  -P\n";
 	std::cout << "    Insert space padding around parenthesis on both the outside\n";
 	std::cout << "    and the inside.\n";
@@ -3611,6 +3631,46 @@ void ASOptions::parseOption(const std::string& arg)
 	else if (isOption(arg, "pad-type-colon=none"))
 	{
 		formatter.setTypeColonPaddingMode(TYPE_COLON_PAD_NONE);
+	}
+	else if (isOption(arg, "pad-closure-braces"))
+	{
+		formatter.setClosureBracePaddingMode(SCALA_PAD_INSERT);
+	}
+	else if (isOption(arg, "pad-closure-braces=none"))
+	{
+		formatter.setClosureBracePaddingMode(SCALA_PAD_REMOVE);
+	}
+	else if (isOption(arg, "pad-block-braces"))
+	{
+		formatter.setBlockBracePaddingMode(SCALA_PAD_INSERT);
+	}
+	else if (isOption(arg, "pad-block-braces=none"))
+	{
+		formatter.setBlockBracePaddingMode(SCALA_PAD_REMOVE);
+	}
+	else if (isOption(arg, "pad-import-braces"))
+	{
+		formatter.setImportBracePaddingMode(SCALA_PAD_INSERT);
+	}
+	else if (isOption(arg, "pad-import-braces=none"))
+	{
+		formatter.setImportBracePaddingMode(SCALA_PAD_REMOVE);
+	}
+	else if (isOption(arg, "pad-brace-call"))
+	{
+		formatter.setBraceCallPaddingMode(SCALA_PAD_INSERT);
+	}
+	else if (isOption(arg, "pad-brace-call=none"))
+	{
+		formatter.setBraceCallPaddingMode(SCALA_PAD_REMOVE);
+	}
+	else if (isOption(arg, "pad-pattern-at"))
+	{
+		formatter.setPatternAtPaddingMode(SCALA_PAD_INSERT);
+	}
+	else if (isOption(arg, "pad-pattern-at=none"))
+	{
+		formatter.setPatternAtPaddingMode(SCALA_PAD_REMOVE);
 	}
 	else if (isOption(arg, "pad-include"))
 	{

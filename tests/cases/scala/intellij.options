@@ -1,0 +1,11 @@
+--indent=spaces=2
+--pad-oper
+--pad-comma
+--pad-header
+--pad-type-colon=after
+--pad-closure-braces
+--pad-block-braces=none
+--pad-import-braces=none
+--pad-brace-call
+--pad-pattern-at=none
+--line-between-members

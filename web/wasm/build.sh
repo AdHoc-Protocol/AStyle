@@ -14,7 +14,8 @@
 #   libclang_rt-<v>.tar.gz, with a clang having the wasm32 target and wasm-ld
 #   (LLVM 21 or later for the libc++ headers of wasi-sdk 34):
 #     WASI_SDK        the directory with the unpacked wasi-sysroot-<v> and
-#                     libclang_rt-<v> (default ../wasi-sdk next to the repository)
+#                     libclang_rt-<v> (default ../wasi-sdk next to the repository,
+#                     or wasi-sdk in Program Files on Windows)
 #     CLANG           the compiler (default clang++)
 #
 # The same sources as the program are compiled with the library entry point
@@ -28,7 +29,12 @@ if [ -n "$WASI_SDK_ROOT" ]; then
 	SYSROOT=$WASI_SDK_ROOT/share/wasi-sysroot
 	BUILTINS=$(ls "$WASI_SDK_ROOT"/lib/clang/*/lib/wasm32-unknown-wasip1/libclang_rt.builtins.a 2>/dev/null | tail -1)
 else
-	WASI_SDK=${WASI_SDK:-../wasi-sdk}
+	if [ -z "$WASI_SDK" ]; then
+		WASI_SDK=../wasi-sdk
+		if [ ! -d "$WASI_SDK" ] && [ -n "$PROGRAMFILES" ] && [ -d "$PROGRAMFILES/wasi-sdk" ]; then
+			WASI_SDK=$PROGRAMFILES/wasi-sdk
+		fi
+	fi
 	CLANG=${CLANG:-clang++}
 	SYSROOT=$(ls -d "$WASI_SDK"/wasi-sysroot-* 2>/dev/null | sort -V | tail -1)
 	BUILTINS=$(ls "$WASI_SDK"/libclang_rt-*/wasm32-unknown-wasip1/libclang_rt.builtins.a 2>/dev/null | sort -V | tail -1)

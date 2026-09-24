@@ -12,12 +12,14 @@ const { languages } = require('./options');
 
 const root = path.resolve(__dirname, '..', '..');
 
-// The astyle executable: $ASTYLE_BIN, the development build, the CMake build, or the PATH.
+// The astyle executable: $ASTYLE_BIN, the development build ($ASTYLE_BUILD or build-local),
+// the CMake build, or the PATH.
 function findExecutable() {
 	if (process.env.ASTYLE_BIN)
 		return process.env.ASTYLE_BIN;
 	const exe = process.platform === 'win32' ? 'astyle.exe' : 'astyle';
 	const candidates = [
+		...(process.env.ASTYLE_BUILD ? [path.join(process.env.ASTYLE_BUILD, exe)] : []),
 		path.join(root, 'build-local', exe),
 		path.join(root, 'AStyle', 'build_local', exe),
 		path.join(root, 'AStyle', 'build', 'cmake', exe),

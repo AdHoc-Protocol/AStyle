@@ -4,7 +4,7 @@
 //
 //   node web/server.js [--port 8080] [--host 127.0.0.1]
 //
-// The astyle executable is $ASTYLE_BIN, or the build in build-local/.
+// The astyle executable is $ASTYLE_BIN, or the build in $ASTYLE_BUILD or build-local/.
 
 'use strict';
 

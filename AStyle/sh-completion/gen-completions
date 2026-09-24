@@ -98,6 +98,31 @@ parser:option "--pad-type-colon"
    :description "Scala: set the space padding around a type colon"
    :choices {"after", "all", "none"}
 
+parser:option "--pad-closure-braces"
+   :description "Scala: the spaces inside the braces of a one-line lambda"
+   :args "?"
+   :choices {"none"}
+
+parser:option "--pad-block-braces"
+   :description "Scala: the spaces inside the braces of a one-line block"
+   :args "?"
+   :choices {"none"}
+
+parser:option "--pad-import-braces"
+   :description "Scala: the spaces inside the braces of import selectors"
+   :args "?"
+   :choices {"none"}
+
+parser:option "--pad-brace-call"
+   :description "Scala: the space before the brace of a method call"
+   :args "?"
+   :choices {"none"}
+
+parser:option "--pad-pattern-at"
+   :description "Scala: the spaces around the @ of a pattern"
+   :args "?"
+   :choices {"none"}
+
 parser:option "--pad-include"
    :description "Insert space padding after include directives"
    :args "?"

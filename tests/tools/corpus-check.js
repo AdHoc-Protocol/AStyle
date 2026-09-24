@@ -237,7 +237,10 @@ function main() {
 	if (csPairs.length) {
 		const list = path.join(tmpDir, 'cspairs.txt');
 		fs.writeFileSync(list, csPairs.map(p => p.original + '\t' + p.output).join('\n'));
-		const tool = path.join(__dirname, 'cstokens', 'bin', process.platform === 'win32' ? 'cstokens.exe' : 'cstokens');
+		// the tool is built in tests/tools/cstokens/bin, or in $ASTYLE_BUILD/cstokens/bin
+		const exe = process.platform === 'win32' ? 'cstokens.exe' : 'cstokens';
+		const built = process.env.ASTYLE_BUILD ? path.join(process.env.ASTYLE_BUILD, 'cstokens', 'bin', exe) : '';
+		const tool = built && fs.existsSync(built) ? built : path.join(__dirname, 'cstokens', 'bin', exe);
 		const r = spawnSync(tool, [list], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 		if (r.error) add('tokens', 'cstokens', r.error.message);
 		for (const line of (r.stdout || '').split(/\r?\n/).filter(Boolean)) {

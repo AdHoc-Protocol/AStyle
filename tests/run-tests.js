@@ -12,7 +12,8 @@
 // Every case is also checked for idempotency: formatting the expected output
 // must not change it.
 //
-//   --bin <astyle>   the executable to test (default: ../build-local/astyle(.exe))
+//   --bin <astyle>   the executable to test (default: astyle(.exe) in $ASTYLE_BUILD, or in
+//                    ../build-local)
 //   --update         write the actual output to the expected files
 //   filter           run only the cases whose path contains the text
 
@@ -24,7 +25,8 @@ const { spawnSync } = require('child_process');
 
 const root = __dirname;
 const args = process.argv.slice(2);
-let bin = path.join(root, '..', 'build-local', process.platform === 'win32' ? 'astyle.exe' : 'astyle');
+let bin = path.join(process.env.ASTYLE_BUILD || path.join(root, '..', 'build-local'),
+	process.platform === 'win32' ? 'astyle.exe' : 'astyle');
 let update = false;
 let filter = '';
 for (let i = 0; i < args.length; i++) {

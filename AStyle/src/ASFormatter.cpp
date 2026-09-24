@@ -53,6 +53,11 @@ ASFormatter::ASFormatter()
     shouldPadOperators = false;
     negationPadMode = NEGATION_PAD_NO_CHANGE;
     typeColonPadMode = TYPE_COLON_PAD_NO_CHANGE;
+    closureBracePadMode = SCALA_PAD_NO_CHANGE;
+    blockBracePadMode = SCALA_PAD_NO_CHANGE;
+    importBracePadMode = SCALA_PAD_NO_CHANGE;
+    braceCallPadMode = SCALA_PAD_NO_CHANGE;
+    patternAtPadMode = SCALA_PAD_NO_CHANGE;
     includeDirectivePaddingMode = INCLUDE_PAD_NO_CHANGE;
     shouldPadParensOutside = false;
     shouldPadFirstParen = false;
@@ -78,6 +83,9 @@ ASFormatter::ASFormatter()
     shouldBreakClosingHeaderBlocks = false;
     shouldLineBetweenMembers = false;
     shouldLineBetweenAllMembers = false;
+    isScalaMemberMethod = false;
+    isScalaPreviousMemberMethod = false;
+    isScalaFirstMemberPending = false;
     needBlankBeforeNextMember = false;
     lineBetweenMembersDoBlank = false;
     lineBetweenMembersPassedClassClose = false;
@@ -1474,8 +1482,9 @@ void ASFormatter::handleEndOfBlock()
             isAppendPostBlockEmptyLineRequested = true;
         }
 
-        // line-between-members=all: insert blank after field at class scope
-        if (shouldLineBetweenAllMembers
+        // line-between-members=all: insert blank after field at class scope,
+        // in Scala around every method, e.g. "def f = 1", the next member decides
+        if ((shouldLineBetweenAllMembers || (shouldLineBetweenMembers && isScalaStyle()))
                 && isBraceType(braceTypeStack->back(), BraceType::DEFINITION_TYPE)
                 && !isBraceType(braceTypeStack->back(), BraceType::NAMESPACE_TYPE)
                 && parenStack->back() == 0)
@@ -2550,6 +2559,14 @@ std::string ASFormatter::nextLine()
             continue;
         }
 
+        // the @ of a Scala pattern binder, e.g. "case x @ Some(y)"
+        if (currentChar == '@' && patternAtPadMode != SCALA_PAD_NO_CHANGE && isScalaStyle()
+                && isScalaPatternAt())
+        {
+            formatPatternAt();
+            continue;
+        }
+
         if ((shouldPadOperators || negationPadMode != NEGATION_PAD_NO_CHANGE) && newHeader != nullptr && !isOperatorPaddingDisabled())
         {
             padOperators(newHeader);
@@ -2651,7 +2668,14 @@ std::string ASFormatter::nextLine()
     if (lineBetweenMembersDoBlank)
     {
         bool doInsertBlank = true;
-        if (!shouldLineBetweenAllMembers)
+        // a Scala method has a blank line before and after it
+        if (!shouldLineBetweenAllMembers && isScalaStyle())
+        {
+            isScalaPreviousMemberMethod = isScalaMemberMethod;
+            isScalaMemberMethod = isScalaMethodLine(readyFormattedLine);
+            doInsertBlank = isScalaPreviousMemberMethod || isScalaMemberMethod;
+        }
+        else if (!shouldLineBetweenAllMembers)
         {
             // Non-all mode: insert blank only before methods/properties, not before data fields.
             // A data field line ends with ';' but the character before ';' is not ')'.
@@ -2665,10 +2689,33 @@ std::string ASFormatter::nextLine()
                     doInsertBlank = false;
             }
         }
+        // not before the end of a Scala class, the virtual closing brace of "object B:"
+        // or an end marker, e.g. "end B"
+        if (isScalaStyle())
+        {
+            size_t first = readyFormattedLine.find_first_not_of(" \t");
+            if (first != std::string::npos
+                    && (readyFormattedLine[first] == '}'
+                        || (readyFormattedLine.compare(first, 3, "end") == 0
+                            && (first + 3 == readyFormattedLine.length() || readyFormattedLine[first + 3] == ' '))))
+                doInsertBlank = false;
+        }
         if (doInsertBlank)
             prependEmptyLine = true;
 
         lineBetweenMembersDoBlank = false;
+    }
+
+    // the first member of a Scala class, e.g. after "class A {" or "object B:"
+    else if (isScalaFirstMemberPending && readyFormattedLineLength > 0)
+    {
+        std::string_view line = readyFormattedLine;
+        size_t last = line.find_last_not_of(" \t");
+        if (last != std::string_view::npos && line[last] != '{')
+        {
+            isScalaMemberMethod = isScalaMethodLine(line);
+            isScalaFirstMemberPending = false;
+        }
     }
 
     if (prependEmptyLine		// prepend a blank line before this formatted line
@@ -2968,6 +3015,46 @@ void ASFormatter::setNegationPaddingMode(NegationPaddingMode mode)
 void ASFormatter::setTypeColonPaddingMode(TypeColonPaddingMode mode)
 {
     typeColonPadMode = mode;
+}
+
+/**
+ * set the spaces inside the braces of a one-line Scala lambda, e.g. "{ x => x }"
+ */
+void ASFormatter::setClosureBracePaddingMode(ScalaPaddingMode mode)
+{
+    closureBracePadMode = mode;
+}
+
+/**
+ * set the spaces inside the braces of another one-line Scala block, e.g. "{ a }"
+ */
+void ASFormatter::setBlockBracePaddingMode(ScalaPaddingMode mode)
+{
+    blockBracePadMode = mode;
+}
+
+/**
+ * set the spaces inside the braces of the selectors of a Scala import, e.g. "import a.{ B, C }"
+ */
+void ASFormatter::setImportBracePaddingMode(ScalaPaddingMode mode)
+{
+    importBracePadMode = mode;
+}
+
+/**
+ * set the space before the brace of a Scala method call, e.g. "xs.foreach { ... }"
+ */
+void ASFormatter::setBraceCallPaddingMode(ScalaPaddingMode mode)
+{
+    braceCallPadMode = mode;
+}
+
+/**
+ * set the spaces around the @ of a Scala pattern binder, e.g. "case x @ Some(y)"
+ */
+void ASFormatter::setPatternAtPaddingMode(ScalaPaddingMode mode)
+{
+    patternAtPadMode = mode;
 }
 
 /**
@@ -5543,6 +5630,259 @@ void ASFormatter::formatTypeColon()
 }
 
 /**
+ * Set the spaces inside the braces of a Scala one-line block beginning at the
+ * current brace: a lambda, e.g. "{ x => x }" or "{ case (a, b) => a }", the
+ * selectors of an import, e.g. "import a.{B, C}", or another block, e.g. "{ a }".
+ * The spaces of the current line are changed before the chars are appended.
+ */
+void ASFormatter::padScalaOneLineBraces()
+{
+    assert(currentChar == '{');
+    // the closing brace on the line, the text of a literal is masked
+    int depth = 0;
+    size_t close = std::string::npos;
+    bool isLambda = false;
+    for (size_t i = charNum + 1; i < currentLine.length(); i++)
+    {
+        char ch = currentLine[i];
+        if (currentLine.compare(i, 2, "//") == 0 || currentLine.compare(i, 2, "/*") == 0
+                || ch == VIRTUAL_BRACE || ch == VIRTUAL_TERMINATOR)
+            return;
+        if (ch == '{' || ch == '(' || ch == '[')
+            ++depth;
+        else if (ch == ')' || ch == ']')
+            --depth;
+        else if (ch == '}' && depth-- == 0)
+        {
+            close = i;
+            break;
+        }
+        else if (depth == 0 && currentLine.compare(i, 2, "=>") == 0)
+            isLambda = true;
+    }
+    if (close == std::string::npos)
+        return;
+    size_t first = currentLine.find_first_not_of(" \t", charNum + 1);
+    if (first == close)
+        return;                                 // an empty block "{}"
+    if (currentLine.compare(first, 4, "case") == 0
+            && (first + 4 >= close || !isLegalNameChar(currentLine[first + 4])))
+        isLambda = true;
+    size_t previous = formattedLine.find_last_not_of(" \t");
+    bool isImport = previous != std::string::npos && formattedLine[previous] == '.';
+    ScalaPaddingMode mode = isImport ? importBracePadMode : isLambda ? closureBracePadMode : blockBracePadMode;
+    if (mode == SCALA_PAD_NO_CHANGE)
+        return;
+    size_t wanted = (mode == SCALA_PAD_INSERT) ? 1 : 0;
+    // before the closing brace first, it does not move the text after the opening brace
+    size_t last = currentLine.find_last_not_of(" \t", close - 1);
+    size_t spaces = close - (last + 1);
+    if (spaces != wanted)
+    {
+        currentLine.replace(last + 1, spaces, wanted, ' ');
+        spacePadNum += static_cast<int>(wanted) - static_cast<int>(spaces);
+    }
+    spaces = first - (charNum + 1);
+    if (spaces != wanted)
+    {
+        currentLine.replace(charNum + 1, spaces, wanted, ' ');
+        spacePadNum += static_cast<int>(wanted) - static_cast<int>(spaces);
+    }
+}
+
+/**
+ * Check if the current brace is the argument of a Scala method call, e.g.
+ * "xs.foreach {" or "foo(a) {", not a template body, e.g. "class A {" or
+ * "new B(x) {", not the block of a header, e.g. "if (a) {", or a definition,
+ * e.g. "def f(x: Int) {".
+ */
+bool ASFormatter::isScalaBraceCall() const
+{
+    assert(currentChar == '{');
+    static const std::string_view keywords[] =
+    {
+        "else", "try", "finally", "do", "yield", "match", "then", "with", "extends", "derives",
+        "catch", "if", "while", "for", "return", "throw", "new", "case", "val", "var", "def",
+        "class", "object", "trait", "enum", "given", "package", "type", "extension", "import",
+        "export", "implicit", "lazy", "override", "private", "protected", "abstract", "final", "sealed"
+    };
+    auto isKeyword = [&](std::string_view word)
+    {
+        return std::find(std::begin(keywords), std::end(keywords), word) != std::end(keywords);
+    };
+    // the word ending before a position, and its start
+    auto wordBefore = [&](size_t end, size_t& start) -> std::string_view
+    {
+        size_t last = currentLine.find_last_not_of(" \t", end);
+        if (last == std::string::npos || !isLegalNameChar(currentLine[last]) || currentLine[last] == '.')
+            return {};
+        start = last;
+        while (start > 0 && isLegalNameChar(currentLine[start - 1]) && currentLine[start - 1] != '.')
+            --start;
+        return std::string_view(currentLine).substr(start, last - start + 1);
+    };
+    if (charNum == 0)
+        return false;
+    size_t last = currentLine.find_last_not_of(" \t", charNum - 1);
+    if (last == std::string::npos)
+        return false;
+    size_t nameEnd = last;
+    // the arguments or the type arguments of the call, e.g. "foo(a) {" or "foo[T] {"
+    while (currentLine[nameEnd] == ')' || currentLine[nameEnd] == ']')
+    {
+        int depth = 0;
+        size_t open = std::string::npos;
+        for (size_t i = nameEnd + 1; i-- > 0;)
+        {
+            char ch = currentLine[i];
+            if (ch == ')' || ch == ']')
+                ++depth;
+            else if ((ch == '(' || ch == '[') && --depth == 0)
+            {
+                open = i;
+                break;
+            }
+        }
+        if (open == std::string::npos || open == 0)
+            return false;
+        nameEnd = currentLine.find_last_not_of(" \t", open - 1);
+        if (nameEnd == std::string::npos)
+            return false;
+    }
+    size_t nameStart = 0;
+    std::string_view name = wordBefore(nameEnd, nameStart);
+    if (name.empty() || isKeyword(name))
+        return false;
+    // the name of a definition or of a type, e.g. "def f" or "extends B"
+    size_t beforeStart = 0;
+    std::string_view before = nameStart > 0 ? wordBefore(nameStart - 1, beforeStart) : std::string_view();
+    if (!before.empty() && isKeyword(before))
+        return false;
+    // "class A extends B with C {", the statement of a template
+    std::string_view trimmed = std::string_view(currentLine).substr(0, charNum);
+    size_t firstText = trimmed.find_first_not_of(" \t");
+    if (firstText != std::string_view::npos)
+    {
+        for (std::string_view word : { "class", "object", "trait", "enum", "given", "case class", "case object" })
+        {
+            if (trimmed.compare(firstText, word.length(), word) == 0)
+                return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * Check if a line begins a Scala method, e.g. "override def f = 1" or "@tailrec private def g".
+ */
+bool ASFormatter::isScalaMethodLine(std::string_view line) const
+{
+    static const std::string_view modifiers[] =
+    {
+        "private", "protected", "override", "final", "implicit", "lazy", "inline", "transparent",
+        "abstract", "sealed", "open", "infix"
+    };
+    size_t i = line.find_first_not_of(" \t");
+    while (i != std::string_view::npos && i < line.length())
+    {
+        size_t end = i;
+        if (line[i] == '@')
+            ++end;
+        while (end < line.length() && isLegalNameChar(line[end]) && line[end] != '.')
+            ++end;
+        std::string_view word = line.substr(i, end - i);
+        if (word == "def")
+            return true;
+        bool isModifier = std::find(std::begin(modifiers), std::end(modifiers), word) != std::end(modifiers);
+        if (!(isModifier || (!word.empty() && word[0] == '@')))
+            return false;
+        // the qualifier of a modifier or the arguments of an annotation, e.g. "private[pkg]"
+        while (end < line.length() && (line[end] == '[' || line[end] == '(' || line[end] == '.'))
+        {
+            if (line[end] == '.')
+            {
+                ++end;
+                while (end < line.length() && isLegalNameChar(line[end]) && line[end] != '.')
+                    ++end;
+                continue;
+            }
+            size_t closeAt = line.find(line[end] == '[' ? ']' : ')', end);
+            if (closeAt == std::string_view::npos)
+                return false;
+            end = closeAt + 1;
+        }
+        i = line.find_first_not_of(" \t", end);
+    }
+    return false;
+}
+
+/**
+ * Check if the current @ binds a name in a Scala pattern, e.g. "case x @ Some(y)"
+ * or "val all @ (a, b) = t", not the @ of an annotation, e.g. "@tailrec".
+ */
+bool ASFormatter::isScalaPatternAt() const
+{
+    assert(currentChar == '@');
+    if (charNum == 0)
+        return false;
+    size_t previous = currentLine.find_last_not_of(" \t", charNum - 1);
+    size_t next = currentLine.find_first_not_of(" \t", charNum + 1);
+    if (previous == std::string::npos || next == std::string::npos)
+        return false;
+    // a name before, a pattern after
+    if (!isLegalNameChar(currentLine[previous]) || currentLine[previous] == '.')
+        return false;
+    char nextChar = currentLine[next];
+    if (!(isLegalNameChar(nextChar) || nextChar == '(' || nextChar == '"' || nextChar == '-'))
+        return false;
+    // the name is a variable of a pattern: of a case clause, a val, a var or a generator
+    std::string_view line(currentLine);
+    size_t firstText = line.find_first_not_of(" \t");
+    auto startsWith = [&](std::string_view word)
+    {
+        return line.compare(firstText, word.length(), word) == 0
+               && (firstText + word.length() >= line.length() || !isLegalNameChar(line[firstText + word.length()]));
+    };
+    if (startsWith("case"))
+        return !(line.compare(firstText, 10, "case class") == 0 || line.compare(firstText, 11, "case object") == 0);
+    if (startsWith("val") || startsWith("var"))
+        return line.find('=', charNum) != std::string::npos;
+    return line.find("<-", charNum) != std::string::npos;
+}
+
+/**
+ * Pad the @ of a Scala pattern binder, e.g. "case x @ Some(y)".
+ */
+void ASFormatter::formatPatternAt()
+{
+    assert(currentChar == '@');
+    size_t wanted = (patternAtPadMode == SCALA_PAD_INSERT) ? 1 : 0;
+    size_t lastText = formattedLine.find_last_not_of(" \t");
+    if (lastText != std::string::npos)
+    {
+        size_t spaces = formattedLine.length() - (lastText + 1);
+        if (spaces != wanted)
+        {
+            formattedLine.resize(lastText + 1);
+            formattedLine.append(wanted, ' ');
+            spacePadNum += static_cast<int>(wanted) - static_cast<int>(spaces);
+        }
+    }
+    appendCurrentChar();
+    size_t next = currentLine.find_first_not_of(" \t", charNum + 1);
+    if (next == std::string::npos)
+        return;
+    size_t spaces = next - (charNum + 1);
+    // a space stays before a negative number, "@-1" would be an operator
+    size_t after = (wanted == 0 && currentLine[next] == '-') ? 1 : wanted;
+    if (spaces != after)
+    {
+        currentLine.replace(charNum + 1, spaces, after, ' ');
+        spacePadNum += static_cast<int>(after) - static_cast<int>(spaces);
+    }
+}
+
+/**
  * format pointer or reference
  * currentChar contains the pointer or reference
  * the symbol and necessary padding will be appended to formattedLine
@@ -6393,10 +6733,33 @@ void ASFormatter::formatOpeningBrace(BraceType braceType)
 
     parenStack->emplace_back(0);
 
+    bool isVirtualBrace = charNum > 0 && currentLine[charNum - 1] == VIRTUAL_BRACE;
+    if (isScalaStyle() && !isVirtualBrace)
+        padScalaOneLineBraces();
+    // the members of a Scala class follow, e.g. "class A {" or "object B:"
+    if (isScalaStyle() && isBraceType(braceType, BraceType::DEFINITION_TYPE))
+    {
+        isScalaFirstMemberPending = true;
+        isScalaMemberMethod = false;
+    }
+
+    // the brace of a Scala method call is attached without a space, e.g. "xs.foreach{ ... }"
+    bool isUnpaddedCall = isScalaStyle() && !isVirtualBrace && braceCallPadMode == SCALA_PAD_REMOVE
+                          && isScalaBraceCall();
+    if (isUnpaddedCall)
+    {
+        size_t lastText = formattedLine.find_last_not_of(" \t");
+        if (lastText != std::string::npos && lastText + 1 < formattedLine.length())
+        {
+            spacePadNum -= static_cast<int>(formattedLine.length() - (lastText + 1));
+            formattedLine.resize(lastText + 1);
+        }
+    }
+
     // a virtual brace of a Scala indentation region stays where it is,
     // a Kotlin or Scala brace directly after a paren or dot stays attached, e.g. "({ x -> x })"
     // or "import a.{B, C}"
-    if (shouldPreserveBraceFormat || (charNum > 0 && currentLine[charNum - 1] == VIRTUAL_BRACE)
+    if (shouldPreserveBraceFormat || isVirtualBrace || isUnpaddedCall
             || ((isKotlinStyle() || isScalaStyle()) && !formattedLine.empty()
                 && (formattedLine.back() == '(' || formattedLine.back() == '[' || formattedLine.back() == '.')))
     {
@@ -6572,6 +6935,7 @@ void ASFormatter::formatClosingBrace(BraceType braceType)
         // is called (line 862) BEFORE breakLine() fires (line 2030) in the same loop
         // iteration, so the blank for the previous member line hasn't been output yet.
         lineBetweenMembersPassedClassClose = true;
+        isScalaMemberMethod = false;
     }
 
     // mark state of immediately after empty block
@@ -6646,8 +7010,15 @@ void ASFormatter::formatClosingBrace(BraceType braceType)
         isAppendPostBlockEmptyLineRequested = !currentHeader && shouldBreakBlocks;
     }
 
-    // line-between-members: insert blank after method/property close at class scope
-    if (shouldLineBetweenMembers
+    // line-between-members: insert blank after method/property close at class scope,
+    // the members of a Scala class are separated by their kind, a one-line block is not a body,
+    // e.g. "import a.{B, C}"
+    bool isScalaMemberBrace = isScalaStyle()
+                              && (isBraceType(braceTypeStack->back(), BraceType::DEFINITION_TYPE)
+                                  || isBraceType(braceType, BraceType::SINGLE_LINE_TYPE));
+    if (isScalaMemberBrace)
+        ;
+    else if (shouldLineBetweenMembers
             && isBraceType(braceTypeStack->back(), BraceType::DEFINITION_TYPE))
     {
         isAppendPostBlockEmptyLineRequested = true;

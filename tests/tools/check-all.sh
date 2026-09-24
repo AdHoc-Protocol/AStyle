@@ -11,9 +11,10 @@
 #   CORPUS_KOTLIN, CORPUS_SWIFT, CORPUS_DART, CORPUS_SCALA
 #                       directories of sources of the language
 # A check is skipped if its variable is not set.
+# The astyle executable is in $ASTYLE_BUILD, or in build-local/.
 
 cd "$(dirname "$0")/../.." || exit 1
-BIN=build-local/astyle
+BIN=${ASTYLE_BUILD:-build-local}/astyle
 [ -x "$BIN.exe" ] && BIN=$BIN.exe
 MAX=${MAX:-1500}
 [ "$1" = "quick" ] && MAX=300

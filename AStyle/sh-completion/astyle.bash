@@ -4,7 +4,7 @@ _astyle() {
     args=("${COMP_WORDS[@]}")
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="--style --indent --attach-namespaces --attach-classes --attach-inlines --attach-extern-c --attach-closing-while --indent-classes --indent-modifiers --indent-switches --indent-cases --indent-namespaces --indent-after-parens --indent-continuation --indent-labels --indent-preproc-block --indent-preproc-cond --indent-preproc-define --indent-col1-comments --min-conditional-indent --max-continuation-indent --break-blocks --pad-oper --pad-comma --pad-negation --pad-type-colon --pad-include --pad-paren --pad-first-paren-out --pad-header --pad-brackets --pad-semicolon --delete-empty-lines --fill-empty-lines --align-pointer --align-reference --break-closing-braces --break-elseifs --break-one-line-headers --add-braces --add-one-line-braces --remove-braces --remove-braces=one-line --break-return-type --attach-return-type --keep-one-line-blocks --keep-one-line-statements --convert-tabs --close-templates --remove-comment-prefix --max-code-length --max-code-length-mode --break-after-logical --mode --line-between-members --pad-method-prefix --pad-return-type --pad-param-type --align-method-colon --pad-method-colon --suffix --recursive --dry-run --error-on-changes --exclude --ignore-exclude-errors --ignore-exclude-errors-x --errors-to-stdout --preserve-date --verbose --formatted --quiet --lineend --options --project --ascii --version --help --html --stdin --stdout --squeeze-lines --squeeze-ws --preserve-ws --indent-lambda --block-continuation --align-continuation --accept-empty-list"
+    opts="--style --indent --attach-namespaces --attach-classes --attach-inlines --attach-extern-c --attach-closing-while --indent-classes --indent-modifiers --indent-switches --indent-cases --indent-namespaces --indent-after-parens --indent-continuation --indent-labels --indent-preproc-block --indent-preproc-cond --indent-preproc-define --indent-col1-comments --min-conditional-indent --max-continuation-indent --break-blocks --pad-oper --pad-comma --pad-negation --pad-type-colon --pad-closure-braces --pad-block-braces --pad-import-braces --pad-brace-call --pad-pattern-at --pad-include --pad-paren --pad-first-paren-out --pad-header --pad-brackets --pad-semicolon --delete-empty-lines --fill-empty-lines --align-pointer --align-reference --break-closing-braces --break-elseifs --break-one-line-headers --add-braces --add-one-line-braces --remove-braces --remove-braces=one-line --break-return-type --attach-return-type --keep-one-line-blocks --keep-one-line-statements --convert-tabs --close-templates --remove-comment-prefix --max-code-length --max-code-length-mode --break-after-logical --mode --line-between-members --pad-method-prefix --pad-return-type --pad-param-type --align-method-colon --pad-method-colon --suffix --recursive --dry-run --error-on-changes --exclude --ignore-exclude-errors --ignore-exclude-errors-x --errors-to-stdout --preserve-date --verbose --formatted --quiet --lineend --options --project --ascii --version --help --html --stdin --stdout --squeeze-lines --squeeze-ws --preserve-ws --indent-lambda --block-continuation --align-continuation --accept-empty-list"
 
     case "$prev" in
         --style)
@@ -41,6 +41,10 @@ _astyle() {
             ;;
         --pad-type-colon)
             COMPREPLY=($(compgen -W "after all none" -- "$cur"))
+            return 0
+            ;;
+        --pad-closure-braces|--pad-block-braces|--pad-import-braces|--pad-brace-call|--pad-pattern-at)
+            COMPREPLY=($(compgen -W "none" -- "$cur"))
             return 0
             ;;
         --pad-include)

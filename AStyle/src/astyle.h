@@ -43,6 +43,8 @@ namespace astyle
 constexpr char VIRTUAL_BRACE = '\x15';
 // Follows a '(' inserted by ASLexer around a header condition and precedes its ')'.
 constexpr char VIRTUAL_PAREN = '\x16';
+// Precedes a ';' inserted by ASLexer where a line break ends a statement.
+constexpr char VIRTUAL_TERMINATOR = '\x1F';
 
 enum FileType
 {
@@ -179,6 +181,14 @@ enum TypeColonPaddingMode
     TYPE_COLON_PAD_NONE,        // "x:Int"
     TYPE_COLON_PAD_AFTER,       // "x: Int"
     TYPE_COLON_PAD_ALL          // "x : Int"
+};
+
+// the spaces of a Scala construct, inserted, removed or not changed
+enum ScalaPaddingMode
+{
+    SCALA_PAD_NO_CHANGE,
+    SCALA_PAD_INSERT,
+    SCALA_PAD_REMOVE
 };
 
 enum IncludeDirectivePaddingMode
@@ -973,6 +983,11 @@ public:	// functions
     void setOperatorPaddingMode(bool state);
     void setNegationPaddingMode(NegationPaddingMode mode);
     void setTypeColonPaddingMode(TypeColonPaddingMode mode);
+    void setClosureBracePaddingMode(ScalaPaddingMode mode);
+    void setBlockBracePaddingMode(ScalaPaddingMode mode);
+    void setImportBracePaddingMode(ScalaPaddingMode mode);
+    void setBraceCallPaddingMode(ScalaPaddingMode mode);
+    void setPatternAtPaddingMode(ScalaPaddingMode mode);
     void setIncludeDirectivePaddingMode(IncludeDirectivePaddingMode mode);
 
 
@@ -1117,6 +1132,11 @@ private:  // functions
     void padOperators(const std::string* newOperator);
     bool isScalaTypeColon() const;
     void formatTypeColon();
+    void padScalaOneLineBraces();
+    bool isScalaMethodLine(std::string_view line) const;
+    bool isScalaBraceCall() const;
+    bool isScalaPatternAt() const;
+    void formatPatternAt();
     void padParensOrBrackets(char openDelim, char closeDelim, bool padFirstParen);
     void processPreprocessor();
     void resetEndOfStatement();
@@ -1234,6 +1254,11 @@ private:  // variables
     LineEndFormat lineEnd;
     NegationPaddingMode negationPadMode;
     TypeColonPaddingMode typeColonPadMode;
+    ScalaPaddingMode closureBracePadMode;       // "{ x => x }"
+    ScalaPaddingMode blockBracePadMode;         // "{ a }"
+    ScalaPaddingMode importBracePadMode;        // "import a.{ B, C }"
+    ScalaPaddingMode braceCallPadMode;          // "xs.foreach { ... }"
+    ScalaPaddingMode patternAtPadMode;          // "case x @ Some(y)"
     IncludeDirectivePaddingMode includeDirectivePaddingMode;
     MaxCodeLengthMode maxCodeLengthMode;
 
@@ -1383,6 +1408,9 @@ private:  // variables
     bool shouldBreakClosingHeaderBlocks;
     bool shouldLineBetweenMembers;
     bool shouldLineBetweenAllMembers;
+    bool isScalaMemberMethod;           // the Scala member being output is a method
+    bool isScalaPreviousMemberMethod;   // the Scala member before it is a method
+    bool isScalaFirstMemberPending;     // a definition brace was opened, its first member follows
     bool needBlankBeforeNextMember;
     bool lineBetweenMembersDoBlank;
     bool lineBetweenMembersPassedClassClose;

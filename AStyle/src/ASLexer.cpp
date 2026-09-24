@@ -26,7 +26,6 @@ constexpr char PLACEHOLDER_MARK = '\x1A';   // begins and pads a literal placeho
 constexpr char APOSTROPHE_SUB   = '\x1C';   // Rust lifetime or loop label apostrophe
 constexpr char HASH_SUB         = '\x1D';   // '#' that is not a preprocessor directive
 constexpr char SLASH_SUB        = '\x1E';   // '/' of a nested comment delimiter
-constexpr char VIRTUAL_TERMINATOR = '\x1F'; // precedes an inserted statement terminator ';'
 
 constexpr size_t npos = std::string::npos;
 
@@ -717,7 +716,7 @@ private:
 			case KOTLIN_TYPE:
 				return scanKotlinLiteral(i);
 			case SCALA_TYPE:
-				return scanScalaLiteral(i);
+				return scanScalaLiteral(i, shiftable);
 			case SWIFT_TYPE:
 				return scanSwiftLiteral(i, shiftable);
 			case DART_TYPE:
@@ -1278,7 +1277,7 @@ private:
 
 	// Scala strings, interpolated strings with any interpolator (s"...", f"...",
 	// sql"""..."""), multi-line strings, char literals and quoted identifiers
-	size_t scanScalaLiteral(size_t i)
+	size_t scanScalaLiteral(size_t i, bool& shiftable)
 	{
 		char ch = src[i];
 		if (ch == '\'')
@@ -1305,7 +1304,10 @@ private:
 				{
 					size_t run = countRun(k, '"');
 					if (run >= 3)
+					{
+						shiftable = isMarginString(j, k + run);
 						return k + run;
+					}
 					k += run;
 					continue;
 				}
@@ -1328,6 +1330,34 @@ private:
 		if (interpolated)
 			return scanQuoted(j, '"', true, false, "${", '}');
 		return scanQuoted(j, '"', true, false);
+	}
+
+	// A Scala multi-line string with a margin moves with the code, e.g. """a
+	//   |b""".stripMargin, the whitespace before the margin char is not in the string.
+	// Every line after the first one begins with the margin char or is blank.
+	bool isMarginString(size_t start, size_t end) const
+	{
+		char margin = '|';
+		if (at(end, ".stripMargin('") && end + 16 < len && src[end + 15] == '\'')
+			margin = src[end + 14];
+		else if (!at(end, ".stripMargin") || (end + 12 < len && isIdentChar(src[end + 12])))
+			return false;
+		size_t eol = src.find_first_of("\r\n", start);
+		if (eol == npos || eol >= end)
+			return false;
+		for (size_t k = eol; k < end;)
+		{
+			k = src.find_first_not_of("\r\n", k);
+			if (k == npos || k >= end)
+				break;
+			size_t text = src.find_first_not_of(" \t", k);
+			if (text != npos && text < end && !isEOLChar(src[text]) && src[text] != margin)
+				return false;
+			k = src.find_first_of("\r\n", k);
+			if (k == npos)
+				break;
+		}
+		return true;
 	}
 
 	// Swift strings, multi-line strings, raw strings and quoted identifiers

@@ -134,6 +134,11 @@
                    <li><a href="#_pad-comma">pad-comma </a><li>
                    <li><a href="#_pad-negation">pad-negation </a><li>
                    <li><a href="#_pad-type-colon">pad-type-colon </a><li>
+                   <li><a href="#_pad-closure-braces">pad-closure-braces </a><li>
+                   <li><a href="#_pad-block-braces">pad-block-braces </a><li>
+                   <li><a href="#_pad-import-braces">pad-import-braces </a><li>
+                   <li><a href="#_pad-brace-call">pad-brace-call </a><li>
+                   <li><a href="#_pad-pattern-at">pad-pattern-at </a><li>
                    <li><a href="#_pad-include">pad-include </a><li>
                    <li><a href="#_pad-paren">pad-paren </a><li>
                    <li><a href="#_pad-paren-out">pad-paren=out </a><li>
@@ -556,6 +561,24 @@ end Geometry
                 s"[${item.trim}]"
             .mkString(", ")
 end Geometry
+</pre>
+    </div>
+
+    <p class="example-title">Scala <code>--mode=scala</code><br /><span class="example-note">a multi-line string with a margin moves with the code, the whitespace before <code>|</code> is removed by <code>stripMargin</code></span></p>
+    <div class="code" data-lang="scala">
+        <pre>object Query:
+  def sql(table: String) =
+    s"""SELECT *
+       |FROM $table
+       |WHERE id = ?""".stripMargin
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>object Query:
+    def sql(table: String) =
+        s"""SELECT *
+           |FROM $table
+           |WHERE id = ?""".stripMargin
 </pre>
     </div>
 
@@ -2172,6 +2195,105 @@ isBar = false;
 
     <p>
         &nbsp;</p>
+    <p id="_pad-closure-braces">
+        <code class="title">--pad-closure-braces</code><br />
+        <code class="title">--pad-closure-braces=none</code><br />
+        Scala only. Insert or remove the spaces inside the braces of a one-line lambda or partial function,
+        as <code>SPACE_INSIDE_CLOSURE_BRACES</code> of the IntelliJ Scala plugin (on by default there).
+    </p>
+    <div class="code" data-lang="scala">
+        <pre>val f = xs.map {x =&gt; x + 1}
+val g = xs.collect {case (a, b) =&gt; a}
+</pre>
+        <p class="code">
+            becomes with <code>--pad-closure-braces</code>:</p>
+        <pre>val f = xs.map { x =&gt; x + 1 }
+val g = xs.collect { case (a, b) =&gt; a }
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
+    <p id="_pad-block-braces">
+        <code class="title">--pad-block-braces</code><br />
+        <code class="title">--pad-block-braces=none</code><br />
+        Scala only. Insert or remove the spaces inside the braces of a one-line block that is not a lambda,
+        as <code>SPACES_IN_ONE_LINE_BLOCKS</code> of the IntelliJ Scala plugin (off by default there).
+    </p>
+    <div class="code" data-lang="scala">
+        <pre>val h = if (c) {a} else {b}
+</pre>
+        <p class="code">
+            becomes with <code>--pad-block-braces</code>:</p>
+        <pre>val h = if (c) { a } else { b }
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
+    <p id="_pad-import-braces">
+        <code class="title">--pad-import-braces</code><br />
+        <code class="title">--pad-import-braces=none</code><br />
+        Scala only. Insert or remove the spaces inside the braces of the selectors of an import or an export,
+        as <code>SPACES_IN_IMPORTS</code> of the IntelliJ Scala plugin (off by default there).
+    </p>
+    <div class="code" data-lang="scala">
+        <pre>import a.{B, C}
+import d.{E =&gt; F, _}
+</pre>
+        <p class="code">
+            becomes with <code>--pad-import-braces</code>:</p>
+        <pre>import a.{ B, C }
+import d.{ E =&gt; F, _ }
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
+    <p id="_pad-brace-call">
+        <code class="title">--pad-brace-call</code><br />
+        <code class="title">--pad-brace-call=none</code><br />
+        Scala only. Insert or remove the space before the brace of a method call, as
+        <code>SPACE_BEFORE_BRACE_METHOD_CALL</code> of the IntelliJ Scala plugin (on by default there). The brace of
+        a class, an object, a trait, of <code>new</code> or of a header, e.g. <code>if (a) {</code>, is not a call.
+    </p>
+    <div class="code" data-lang="scala">
+        <pre>xs.foreach{ x =&gt; println(x) }
+future.onComplete{ result =&gt; log(result) }
+</pre>
+        <p class="code">
+            becomes with <code>--pad-brace-call</code>:</p>
+        <pre>xs.foreach { x =&gt; println(x) }
+future.onComplete { result =&gt; log(result) }
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
+    <p id="_pad-pattern-at">
+        <code class="title">--pad-pattern-at</code><br />
+        <code class="title">--pad-pattern-at=none</code><br />
+        Scala only. Insert or remove the spaces around the <code>@</code> that binds a name in a pattern of a case
+        clause, a <code>val</code> or a generator, as <code>SPACES_AROUND_AT_IN_PATTERNS</code> of the IntelliJ Scala
+        plugin (off by default there). The <code>@</code> of an annotation is not changed.
+    </p>
+    <div class="code" data-lang="scala">
+        <pre>x match {
+  case all@Some(v) =&gt; v
+  case pair@(a, b) =&gt; a
+}
+</pre>
+        <p class="code">
+            becomes with <code>--pad-pattern-at --indent=spaces=2</code>:</p>
+        <pre>x match {
+  case all @ Some(v) =&gt; v
+  case pair @ (a, b) =&gt; a
+}
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
     <p id="_pad-paren">
         <code class="title">--pad-paren / -P </code>
         <br />
@@ -2422,6 +2544,8 @@ isBar = false;
         When the "all" parameter is omitted, two or more class <i>fields</i> that are not separated by an empty line stay this way (so, multiple fields can be grouped in a compact way). 
         If the "all" parameter is specified, an empty line is enforced for any combinations of class members. 
         Existing empty lines are kept intact.
+        In Scala every method, <code>def</code>, has an empty line before and after it, whatever its body, as the
+        IntelliJ Scala plugin does, the other members stay grouped.
     </p>
     <div class="code">
         <pre>int i;
