@@ -3620,58 +3620,6 @@ void ASOptions::parseOption(const std::string& arg)
 	{
 		formatter.setNegationPaddingMode(NEGATION_PAD_BEFORE);
 	}
-	else if (isOption(arg, "pad-type-colon=after"))
-	{
-		formatter.setTypeColonPaddingMode(TYPE_COLON_PAD_AFTER);
-	}
-	else if (isOption(arg, "pad-type-colon=all"))
-	{
-		formatter.setTypeColonPaddingMode(TYPE_COLON_PAD_ALL);
-	}
-	else if (isOption(arg, "pad-type-colon=none"))
-	{
-		formatter.setTypeColonPaddingMode(TYPE_COLON_PAD_NONE);
-	}
-	else if (isOption(arg, "pad-closure-braces"))
-	{
-		formatter.setClosureBracePaddingMode(SCALA_PAD_INSERT);
-	}
-	else if (isOption(arg, "pad-closure-braces=none"))
-	{
-		formatter.setClosureBracePaddingMode(SCALA_PAD_REMOVE);
-	}
-	else if (isOption(arg, "pad-block-braces"))
-	{
-		formatter.setBlockBracePaddingMode(SCALA_PAD_INSERT);
-	}
-	else if (isOption(arg, "pad-block-braces=none"))
-	{
-		formatter.setBlockBracePaddingMode(SCALA_PAD_REMOVE);
-	}
-	else if (isOption(arg, "pad-import-braces"))
-	{
-		formatter.setImportBracePaddingMode(SCALA_PAD_INSERT);
-	}
-	else if (isOption(arg, "pad-import-braces=none"))
-	{
-		formatter.setImportBracePaddingMode(SCALA_PAD_REMOVE);
-	}
-	else if (isOption(arg, "pad-brace-call"))
-	{
-		formatter.setBraceCallPaddingMode(SCALA_PAD_INSERT);
-	}
-	else if (isOption(arg, "pad-brace-call=none"))
-	{
-		formatter.setBraceCallPaddingMode(SCALA_PAD_REMOVE);
-	}
-	else if (isOption(arg, "pad-pattern-at"))
-	{
-		formatter.setPatternAtPaddingMode(SCALA_PAD_INSERT);
-	}
-	else if (isOption(arg, "pad-pattern-at=none"))
-	{
-		formatter.setPatternAtPaddingMode(SCALA_PAD_REMOVE);
-	}
 	else if (isOption(arg, "pad-include"))
 	{
 		formatter.setIncludeDirectivePaddingMode(INCLUDE_PAD_AFTER);
@@ -3915,8 +3863,61 @@ void ASOptions::parseOption(const std::string& arg)
 // Return 'false' if the option was not found.
 bool ASOptions::parseOptionContinued(const std::string& arg)
 {
+	// Scala options, here as MSVC limits the length of a chain of else-if
+	if (isOption(arg, "pad-type-colon=after"))
+	{
+		formatter.setTypeColonPaddingMode(TYPE_COLON_PAD_AFTER);
+	}
+	else if (isOption(arg, "pad-type-colon=all"))
+	{
+		formatter.setTypeColonPaddingMode(TYPE_COLON_PAD_ALL);
+	}
+	else if (isOption(arg, "pad-type-colon=none"))
+	{
+		formatter.setTypeColonPaddingMode(TYPE_COLON_PAD_NONE);
+	}
+	else if (isOption(arg, "pad-closure-braces"))
+	{
+		formatter.setClosureBracePaddingMode(SCALA_PAD_INSERT);
+	}
+	else if (isOption(arg, "pad-closure-braces=none"))
+	{
+		formatter.setClosureBracePaddingMode(SCALA_PAD_REMOVE);
+	}
+	else if (isOption(arg, "pad-block-braces"))
+	{
+		formatter.setBlockBracePaddingMode(SCALA_PAD_INSERT);
+	}
+	else if (isOption(arg, "pad-block-braces=none"))
+	{
+		formatter.setBlockBracePaddingMode(SCALA_PAD_REMOVE);
+	}
+	else if (isOption(arg, "pad-import-braces"))
+	{
+		formatter.setImportBracePaddingMode(SCALA_PAD_INSERT);
+	}
+	else if (isOption(arg, "pad-import-braces=none"))
+	{
+		formatter.setImportBracePaddingMode(SCALA_PAD_REMOVE);
+	}
+	else if (isOption(arg, "pad-brace-call"))
+	{
+		formatter.setBraceCallPaddingMode(SCALA_PAD_INSERT);
+	}
+	else if (isOption(arg, "pad-brace-call=none"))
+	{
+		formatter.setBraceCallPaddingMode(SCALA_PAD_REMOVE);
+	}
+	else if (isOption(arg, "pad-pattern-at"))
+	{
+		formatter.setPatternAtPaddingMode(SCALA_PAD_INSERT);
+	}
+	else if (isOption(arg, "pad-pattern-at=none"))
+	{
+		formatter.setPatternAtPaddingMode(SCALA_PAD_REMOVE);
+	}
 	// Objective-C options
-	if (isOption(arg, "xQ", "pad-method-prefix"))
+	else if (isOption(arg, "xQ", "pad-method-prefix"))
 	{
 		formatter.setMethodPrefixPaddingMode(true);
 	}
