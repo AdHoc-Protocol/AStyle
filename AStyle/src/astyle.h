@@ -294,6 +294,7 @@ public:
     void setTabLength(int length);
     void setIndentString(const std::string& indent);
     void setForcedEOL(const std::string& eol);
+    void setScala3EndMarkers(int minLines);
 
     bool maskSource(std::string& text);
     [[nodiscard]] bool isActive() const;
@@ -315,6 +316,7 @@ private:
 
     int fileType;
     bool jsx;
+    int scala3EndMarkerLines;           // the minimal lines of a Scala definition with an end marker
     bool active;
     int tabLength;
     std::string indentString;
@@ -848,6 +850,49 @@ private:  // variables
 
 // TODO rewrite methods to return altered strings
 
+//-----------------------------------------------------------------------
+// Class ASAligner
+// A pass over the formatted text that aligns consecutive lines in columns:
+// declarations (modifiers, type, name, initializer), assignments and trailing
+// comments. It is used for every language when an align option is set.
+//-----------------------------------------------------------------------
+
+class ASAligner
+{
+public:
+    ASAligner(int fileType_, int tabLength_, bool declarations_, bool assignments_, bool comments_);
+    [[nodiscard]] bool isActive() const;
+    [[nodiscard]] std::string align(const std::string& text) const;
+
+private:
+    int fileType;
+    int tabLength;
+    bool alignDeclarations;
+    bool alignAssignments;
+    bool alignComments;
+};
+
+//-----------------------------------------------------------------------
+// Class ASRewriter
+// A pass over the formatted text that sorts the imports and the modifiers
+// and inserts or removes the trailing commas of the lists spanning lines.
+//-----------------------------------------------------------------------
+
+class ASRewriter
+{
+public:
+    ASRewriter(int fileType_, bool sortImports_, bool sortModifiers_, int trailingCommas_, bool scala3Syntax_);
+    [[nodiscard]] bool isActive() const;
+    [[nodiscard]] std::string rewrite(const std::string& text) const;
+
+private:
+    int fileType;
+    bool shouldSortImports;
+    bool shouldSortModifiers;
+    int trailingCommaMode;      // 1 inserts, -1 removes, 0 keeps
+    bool shouldConvertScala3Syntax;
+};
+
 class ASEnhancer : protected ASBase
 {
 public:  // functions
@@ -988,6 +1033,21 @@ public:	// functions
     void setImportBracePaddingMode(ScalaPaddingMode mode);
     void setBraceCallPaddingMode(ScalaPaddingMode mode);
     void setPatternAtPaddingMode(ScalaPaddingMode mode);
+    void setAlignDeclarationsMode(bool state);
+    void setAlignAssignmentsMode(bool state);
+    void setAlignCommentsMode(bool state);
+    void setSortImportsMode(bool state);
+    void setSortModifiersMode(bool state);
+    void setTrailingCommaMode(int mode);
+    void setScala3SyntaxMode(bool state);
+    void setScala3EndMarkers(int minLines);
+    [[nodiscard]] int getScala3EndMarkers() const;
+    [[nodiscard]] bool isTextPassActive() const;
+    [[nodiscard]] std::string rewriteSource(const std::string& text) const;
+    [[nodiscard]] std::string alignText(const std::string& text);
+    [[nodiscard]] bool getAlignDeclarationsMode() const;
+    [[nodiscard]] bool getAlignAssignmentsMode() const;
+    [[nodiscard]] bool getAlignCommentsMode() const;
     void setIncludeDirectivePaddingMode(IncludeDirectivePaddingMode mode);
 
 
@@ -1259,6 +1319,14 @@ private:  // variables
     ScalaPaddingMode importBracePadMode;        // "import a.{ B, C }"
     ScalaPaddingMode braceCallPadMode;          // "xs.foreach { ... }"
     ScalaPaddingMode patternAtPadMode;          // "case x @ Some(y)"
+    bool shouldAlignDeclarations;               // ASAligner, after the formatting
+    bool shouldAlignAssignments;
+    bool shouldAlignComments;
+    bool shouldSortImports;                     // ASRewriter, after the formatting
+    bool shouldSortModifiers;
+    int  trailingCommaMode;                     // 1 inserts, -1 removes, 0 keeps
+    bool shouldConvertScala3Syntax;             // "if (a)" becomes "if a then"
+    int  scala3EndMarkerLines;                  // the minimal lines of a definition with an end marker, 0 none
     IncludeDirectivePaddingMode includeDirectivePaddingMode;
     MaxCodeLengthMode maxCodeLengthMode;
 

@@ -259,6 +259,23 @@ Scala: insert or remove the space before the brace of a method call, xs.foreach 
 .IP "--pad-pattern-at, --pad-pattern-at=none"
 Scala: insert or remove the spaces around the @ of a pattern, case x @ Some(y).
 
+.IP "--align-declarations"
+Align consecutive declarations in columns: the modifiers, the type, the name, the initializer and a trailing comment.
+.IP "--align-assignments"
+Align the operators of consecutive assignments.
+.IP "--align-comments"
+Align the trailing comments of consecutive lines.
+.IP "--sort-imports"
+Sort consecutive imports: Java, Kotlin, Scala, Swift, Dart, Go, Rust and the using directives of C#.
+.IP "--sort-modifiers"
+Sort the modifiers of a declaration in the order of the language: Java, Kotlin, Scala, C#, TypeScript and Swift.
+.IP "--trailing-commas=always, --trailing-commas=never"
+Insert or remove the trailing comma of a list spanning lines: Scala, Kotlin, Rust, Dart, JavaScript and TypeScript.
+.IP "--scala3-syntax"
+Scala: convert the conditions to the Scala 3 syntax, if (a) b becomes if a then b.
+.IP "--scala3-end-markers=#"
+Scala: insert an end marker after a definition of # lines or more without braces.
+
 .IP "--pad-paren OR -P"
 Insert space padding around parenthesis on both the outside and
 the inside.

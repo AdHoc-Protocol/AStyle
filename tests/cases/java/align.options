@@ -1,0 +1,5 @@
+--align-declarations
+--align-assignments
+--align-comments
+--sort-imports
+--sort-modifiers

@@ -58,6 +58,14 @@ ASFormatter::ASFormatter()
     importBracePadMode = SCALA_PAD_NO_CHANGE;
     braceCallPadMode = SCALA_PAD_NO_CHANGE;
     patternAtPadMode = SCALA_PAD_NO_CHANGE;
+    shouldAlignDeclarations = false;
+    shouldAlignAssignments = false;
+    shouldAlignComments = false;
+    shouldSortImports = false;
+    shouldSortModifiers = false;
+    trailingCommaMode = 0;
+    shouldConvertScala3Syntax = false;
+    scala3EndMarkerLines = 0;
     includeDirectivePaddingMode = INCLUDE_PAD_NO_CHANGE;
     shouldPadParensOutside = false;
     shouldPadFirstParen = false;
@@ -1843,8 +1851,10 @@ void ASFormatter::formatFirstOpenBrace(BraceType braceType)
         appendCurrentChar();
         return;
     }
-    // an initializer in a bracket is not padded, e.g. [{ ... }]
-    bool isPaddedBrace = previousNonWSChar != '(' && !(isMaskedStyle() && previousNonWSChar == '[');
+    // an initializer in a bracket is not padded, e.g. [{ ... }], nor the selectors of a Kotlin
+    // or Scala import, e.g. "import a.{B, C}, d"
+    bool isPaddedBrace = previousNonWSChar != '(' && !(isMaskedStyle() && previousNonWSChar == '[')
+                         && !((isKotlinStyle() || isScalaStyle()) && previousNonWSChar == '.');
 
     if (braceMode == ATTACH_MODE || braceMode == LINUX_MODE)
     {
@@ -3055,6 +3065,123 @@ void ASFormatter::setBraceCallPaddingMode(ScalaPaddingMode mode)
 void ASFormatter::setPatternAtPaddingMode(ScalaPaddingMode mode)
 {
     patternAtPadMode = mode;
+}
+
+/**
+ * set the alignment of consecutive declarations in columns, done by ASAligner
+ */
+void ASFormatter::setAlignDeclarationsMode(bool state)
+{
+    shouldAlignDeclarations = state;
+}
+
+/**
+ * set the alignment of the operators of consecutive assignments, done by ASAligner
+ */
+void ASFormatter::setAlignAssignmentsMode(bool state)
+{
+    shouldAlignAssignments = state;
+}
+
+/**
+ * set the alignment of consecutive trailing comments, done by ASAligner
+ */
+void ASFormatter::setAlignCommentsMode(bool state)
+{
+    shouldAlignComments = state;
+}
+
+bool ASFormatter::getAlignDeclarationsMode() const
+{
+    return shouldAlignDeclarations;
+}
+
+bool ASFormatter::getAlignAssignmentsMode() const
+{
+    return shouldAlignAssignments;
+}
+
+bool ASFormatter::getAlignCommentsMode() const
+{
+    return shouldAlignComments;
+}
+
+/**
+ * set the sorting of consecutive imports, done by ASRewriter
+ */
+void ASFormatter::setSortImportsMode(bool state)
+{
+    shouldSortImports = state;
+}
+
+/**
+ * set the sorting of the modifiers of a declaration, done by ASRewriter
+ */
+void ASFormatter::setSortModifiersMode(bool state)
+{
+    shouldSortModifiers = state;
+}
+
+/**
+ * set the trailing commas of the lists spanning lines: 1 inserts, -1 removes, 0 keeps
+ */
+void ASFormatter::setTrailingCommaMode(int mode)
+{
+    trailingCommaMode = mode;
+}
+
+/**
+ * set the conversion of the Scala 2 conditions to the Scala 3 syntax, e.g. "if (a)" becomes "if a then"
+ */
+void ASFormatter::setScala3SyntaxMode(bool state)
+{
+    shouldConvertScala3Syntax = state;
+}
+
+/**
+ * set the minimal lines of a Scala definition that gets an end marker, 0 inserts none
+ */
+void ASFormatter::setScala3EndMarkers(int minLines)
+{
+    scala3EndMarkerLines = minLines;
+}
+
+int ASFormatter::getScala3EndMarkers() const
+{
+    return scala3EndMarkerLines;
+}
+
+/**
+ * Check if a pass over the text is requested: the rewriting before the formatting or the
+ * alignment after it.
+ */
+bool ASFormatter::isTextPassActive() const
+{
+    return shouldAlignDeclarations || shouldAlignAssignments || shouldAlignComments
+           || shouldSortImports || shouldSortModifiers || trailingCommaMode != 0
+           || shouldConvertScala3Syntax;
+}
+
+/**
+ * The pass over the source before the formatting: the imports and the modifiers are
+ * sorted, the trailing commas inserted or removed. The formatting follows, so that the
+ * result is formatted as the source, e.g. the indentation of a list.
+ */
+std::string ASFormatter::rewriteSource(const std::string& text) const
+{
+    ASRewriter rewriter(getFileType(), shouldSortImports, shouldSortModifiers, trailingCommaMode,
+                        shouldConvertScala3Syntax);
+    return rewriter.rewrite(text);
+}
+
+/**
+ * The pass over the formatted text: the alignment in columns.
+ */
+std::string ASFormatter::alignText(const std::string& text)
+{
+    ASAligner aligner(getFileType(), getTabLength(), shouldAlignDeclarations, shouldAlignAssignments,
+                      shouldAlignComments);
+    return aligner.align(text);
 }
 
 /**

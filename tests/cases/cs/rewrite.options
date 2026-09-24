@@ -1,0 +1,4 @@
+--style=allman
+--sort-imports
+--sort-modifiers
+--align-declarations

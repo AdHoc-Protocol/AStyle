@@ -1,0 +1,4 @@
+--sort-imports
+--sort-modifiers
+--align-declarations
+--trailing-commas=always

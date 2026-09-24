@@ -1,0 +1,4 @@
+--indent=spaces=2
+--scala3-syntax
+--scala3-end-markers=4
+--align-declarations

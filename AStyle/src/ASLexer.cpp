@@ -2393,7 +2393,7 @@ std::string ASLexer::Terminator::run()
 //-----------------------------------------------------------------------------
 
 ASLexer::ASLexer(int fileType_)
-	: fileType(fileType_), jsx(true), active(false), tabLength(4), changedLiteral(false), lineRemoved(false)
+	: fileType(fileType_), jsx(true), scala3EndMarkerLines(0), active(false), tabLength(4), changedLiteral(false), lineRemoved(false)
 {
 }
 
@@ -2628,6 +2628,8 @@ std::string ASLexer::Terminator::insertIndentRegions()
 		bool inParens;      // the region is in parens, its statements have no terminators
 		int openerWidth;    // the indentation of the line opening the region
 		std::string opener; // the last token of the line opening the region
+		size_t openLine;    // the first line of the statement opening the region
+		std::string endName;    // the name of the end marker of a definition, e.g. "f" of "def f ="
 	};
 	std::vector<Region> regions;
 	std::vector<std::pair<size_t, std::string>> inserts;
@@ -2639,9 +2641,8 @@ std::string ASLexer::Terminator::insertIndentRegions()
 	const std::string close = eol + "}" + VIRTUAL_BRACE;
 
 	size_t previous = npos;         // the previous line of code
-	// the end of the last line of a region before the line, a line comment indented
-	// as the region is in it
-	auto regionEnd = [&](size_t l, int width) -> size_t
+	// the last line of a region before the line, a line comment indented as the region is in it
+	auto regionLast = [&](size_t l, int width) -> size_t
 	{
 		size_t last = previous;
 		for (size_t k = previous + 1; k < l; k++)
@@ -2649,11 +2650,94 @@ std::string ASLexer::Terminator::insertIndentRegions()
 			if (commentWidths[k] >= width)
 				last = k;
 		}
-		return lineEnds[last];
+		return last;
+	};
+	// the name of the end marker of a definition beginning the line, e.g. "f" of "def f =",
+	// "A" of "private object A:", "extension", empty if none
+	auto endNameOf = [&](size_t l) -> std::string
+	{
+		static const std::string_view modifiers[] =
+		{
+			"private", "protected", "override", "final", "implicit", "lazy", "inline", "transparent",
+			"abstract", "sealed", "open", "case", "infix", "opaque"
+		};
+		const Line& line = lines[l];
+		size_t t = 0;
+		while (t < line.size())
+		{
+			const Token& token = line[t];
+			// an annotation, e.g. "@tailrec" or "@deprecated(\"x\")"
+			if (token.kind == Kind::Punct && token.text == "@" && t + 1 < line.size())
+				t += 2;
+			else if (token.kind == Kind::Word
+			         && std::find(std::begin(modifiers), std::end(modifiers), token.text) != std::end(modifiers))
+				++t;
+			else
+				break;
+			// the qualifier of a modifier or the arguments of an annotation, e.g. "private[pkg]"
+			if (t < line.size() && line[t].kind == Kind::Open && line[t].spaceBefore == false)
+			{
+				int depth = 0;
+				for (; t < line.size(); t++)
+				{
+					if (line[t].kind == Kind::Open)
+						++depth;
+					else if (line[t].kind == Kind::Close && --depth == 0)
+					{
+						++t;
+						break;
+					}
+				}
+			}
+		}
+		if (t >= line.size() || line[t].kind != Kind::Word)
+			return std::string();
+		const std::string& keyword = line[t].text;
+		bool hasName = t + 1 < line.size() && line[t + 1].kind == Kind::Word;
+		if (keyword == "def" || keyword == "class" || keyword == "object" || keyword == "trait" || keyword == "enum")
+			return hasName ? line[t + 1].text : std::string();
+		if (keyword == "extension")
+			return keyword;
+		if (keyword == "given")
+			return hasName && t + 2 < line.size() && line[t + 2].text == ":" ? line[t + 1].text : keyword;
+		if ((keyword == "val" || keyword == "var") && hasName && t + 2 < line.size()
+		        && (line[t + 2].text == "=" || line[t + 2].text == ":"))
+			return line[t + 1].text;
+		return std::string();
+	};
+	// the end marker after a region, e.g. "\n  end f", empty if none
+	auto endMarkerOf = [&](const Region& region, size_t last, size_t l) -> std::string
+	{
+		if (lexer.scala3EndMarkerLines <= 0 || region.endName.empty() || region.inParens)
+			return std::string();
+		// the lines of the definition, a semicolon between statements counts as a line break,
+		// the formatting may break the line there
+		size_t count = 0;
+		for (size_t k = region.openLine; k <= last && k < lines.size(); k++)
+		{
+			if (lines[k].empty())
+				continue;
+			++count;
+			for (size_t t = 1; t + 1 < lines[k].size(); t++)
+			{
+				if (lines[k][t].text == ";" && lines[k][t - 1].text != terminator)
+					++count;
+			}
+		}
+		if (count < static_cast<size_t>(lexer.scala3EndMarkerLines))
+			return std::string();
+		// an end marker follows, e.g. "end f"
+		if (l < lines.size() && !lines[l].empty() && lines[l][0].kind == Kind::Word && lines[l][0].text == "end")
+			return std::string();
+		size_t start = lines[region.openLine].empty() ? 0 : lines[region.openLine][0].start;
+		size_t lineStart = src.find_last_of("\r\n", start == 0 ? 0 : start - 1);
+		lineStart = (lineStart == npos || start == 0) ? 0 : lineStart + 1;
+		return eol + src.substr(lineStart, start - lineStart) + "end " + region.endName + terminator + ";";
 	};
 	// the indentation of the line beginning the statement, the region of an opener at
 	// the end of a continuation line is indented relative to it, e.g. "case x if a\n    && b =>"
 	int statementWidth = 0;
+	size_t statementLine = 0;       // the first line of the statement
 	bool statementEnded = true;
 	for (size_t l = 0; l < lines.size(); l++)
 	{
@@ -2686,16 +2770,21 @@ std::string ASLexer::Terminator::insertIndentRegions()
 				break;
 			if (isOperatorLine && width > region.openerWidth && width < region.width)
 				break;
-			// a closing bracket beginning the line closes the regions in the brackets only
-			if (line[0].kind == Kind::Close && line[0].text != "}" && region.depth < depths[l])
+			// a closing bracket beginning the line closes the regions in the brackets only,
+			// e.g. "}" of "new A {" in the body of "def f ="
+			if (line[0].kind == Kind::Close && region.depth < depths[l])
 				break;
 			closedAny = true;
 			// the region ends its statement unless the line continues it, e.g. ".merge" or "else"
-			inserts.emplace_back(regionEnd(l, region.width), continues ? close : close + terminator + ";");
+			size_t last = regionLast(l, region.width);
+			inserts.emplace_back(lineEnds[last], continues ? close : close + terminator + ";" + endMarkerOf(region, last, l));
 			regions.pop_back();
 		}
 		if (statementEnded || (closedAny && !continues))
+		{
 			statementWidth = width;
+			statementLine = l;
+		}
 
 		size_t next = l + 1;
 		while (next < lines.size() && widths[next] < 0)
@@ -2723,8 +2812,13 @@ std::string ASLexer::Terminator::insertIndentRegions()
 				if (lastIndex(line) < line.size())
 					erases.emplace_back(braceAt, line.back().end);
 				inserts.emplace_back(braceAt, open);
+				// the end marker follows the body of a definition, e.g. "def f =" or "object A:",
+				// not a region of the expression of its body, e.g. "def f = if a then"
+				bool isEndMarkerOpener = type() == SCALA_TYPE
+				                         && (word == "=" || word == ":" || word == "with" || word == ")" || word == "]");
 				regions.push_back({ nextWidth, caseRegion, depths[next],
-				                    enclosing[next] == '(' || enclosing[next] == '[', width, word });
+				                    enclosing[next] == '(' || enclosing[next] == '[', width, word,
+				                    statementLine, isEndMarkerOpener ? endNameOf(statementLine) : std::string() });
 			}
 			// a case clause without a body ends the statement, e.g. "case _ =>"
 			else if (word == "=>")
@@ -2770,7 +2864,8 @@ std::string ASLexer::Terminator::insertIndentRegions()
 	}
 	while (!regions.empty() && previous != npos)
 	{
-		inserts.emplace_back(regionEnd(lines.size(), regions.back().width), close + terminator + ";");
+		size_t last = regionLast(lines.size(), regions.back().width);
+		inserts.emplace_back(lineEnds[last], close + terminator + ";" + endMarkerOf(regions.back(), last, lines.size()));
 		regions.pop_back();
 	}
 
@@ -2950,6 +3045,15 @@ std::string ASLexer::restoreLine(const std::string& line) const
 			result.pop_back();
 	}
 	return result;
+}
+
+/**
+ * Insert an end marker after a Scala definition without braces of the lines or more,
+ * e.g. "end f" after "def f =" and its lines, 0 inserts none.
+ */
+void ASLexer::setScala3EndMarkers(int minLines)
+{
+	scala3EndMarkerLines = minLines;
 }
 
 bool ASLexer::isLineRemoved() const

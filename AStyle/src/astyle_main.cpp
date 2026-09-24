@@ -506,11 +506,20 @@ void ASConsole::formatCinToCout()
 	// mask the literals of the languages that need it
 	ASLexer lexer(formatter.getFileType());
 	lexer.setJSX(formatter.getJSXMode());
+	lexer.setScala3EndMarkers(formatter.getScala3EndMarkers());
 	if (formatter.getLineEndFormat() != LINEEND_DEFAULT)
 		lexer.setForcedEOL(outputEOL);
 	{
+		// the imports, the modifiers and the trailing commas are rewritten before the formatting
 		std::string sourceText = outStream.str();
-		if (lexer.maskSource(sourceText))
+		bool isRewritten = false;
+		if (formatter.isTextPassActive())
+		{
+			std::string rewritten = formatter.rewriteSource(sourceText);
+			isRewritten = rewritten != sourceText;
+			sourceText = rewritten;
+		}
+		if (lexer.maskSource(sourceText) || isRewritten)
 		{
 			outStream.str(sourceText);
 			outStream.clear();
@@ -522,13 +531,18 @@ void ASConsole::formatCinToCout()
 	lexer.setTabLength(formatter.getTabLength());
 	lexer.setIndentString(formatter.getIndentString());
 
+	// the passes over the formatted text, e.g. the alignment of the declarations in columns
+	bool hasTextPass = formatter.isTextPassActive();
+	std::ostringstream aligned;
+	std::ostream& output = hasTextPass ? static_cast<std::ostream&>(aligned) : std::cout;
+
 	while (formatter.hasMoreLines())
 	{
 		std::string restored = lexer.restoreLine(formatter.nextLine());
 		// a line of a virtual brace of ASLexer is not output
 		if (lexer.isLineRemoved())
 			continue;
-		std::cout << restored;
+		output << restored;
 
 		if (LINEEND_DEFAULT == formatter.getLineEndFormat())
 		{
@@ -537,18 +551,20 @@ void ASConsole::formatCinToCout()
 
 		if (formatter.hasMoreLines())
 		{
-			std::cout << outputEOL;
+			output << outputEOL;
 		}
 		else
 		{
 			// this can happen if the file if missing a closing brace and break-blocks is requested
 			if (formatter.getIsLineReady())
 			{
-				std::cout << outputEOL;
-				std::cout << lexer.restoreLine(formatter.nextLine());
+				output << outputEOL;
+				output << lexer.restoreLine(formatter.nextLine());
 			}
 		}
 	}
+	if (hasTextPass)
+		std::cout << formatter.alignText(aligned.str());
 	std::cout.flush();
 }
 
@@ -579,6 +595,10 @@ void ASConsole::formatFile(const std::string& fileName_)
 	std::stringstream in;
 	std::ostringstream out;
 	FileEncoding encoding = readFile(fileName_, in);
+	// the passes over the formatted text, e.g. the alignment of the declarations in columns,
+	// their result is compared with the input text
+	bool hasTextPass = formatter.isTextPassActive();
+	std::string inputText = hasTextPass ? in.str() : std::string();
 
 	// Unless a specific language mode has been set, set the language mode
 	// according to the file's suffix.
@@ -595,11 +615,20 @@ void ASConsole::formatFile(const std::string& fileName_)
 	// do this AFTER setting the file mode
 	ASLexer lexer(formatter.getFileType());
 	lexer.setJSX(formatter.getJSXMode());
+	lexer.setScala3EndMarkers(formatter.getScala3EndMarkers());
 	if (formatter.getLineEndFormat() != LINEEND_DEFAULT)
 		lexer.setForcedEOL(outputEOL);
 	{
+		// the imports, the modifiers and the trailing commas are rewritten before the formatting
 		std::string sourceText = in.str();
-		if (lexer.maskSource(sourceText))
+		bool isRewritten = false;
+		if (formatter.isTextPassActive())
+		{
+			std::string rewritten = formatter.rewriteSource(sourceText);
+			isRewritten = rewritten != sourceText;
+			sourceText = rewritten;
+		}
+		if (lexer.maskSource(sourceText) || isRewritten)
 		{
 			in.str(sourceText);
 			in.clear();
@@ -664,6 +693,12 @@ void ASConsole::formatFile(const std::string& fileName_)
 	// the line ends inside of a multi-line literal are not compared above
 	if (lexer.hasChangedLiteral())
 		filesAreIdentical = false;
+	if (hasTextPass)
+	{
+		std::string text = formatter.alignText(out.str());
+		filesAreIdentical = (text == inputText);
+		out.str(text);
+	}
 
 	// remove targetDirectory from filename if required by print
 	std::string displayName(fileName_);
@@ -2110,6 +2145,36 @@ void ASConsole::printHelp() const
 	std::cout << '\n';
 	std::cout << "    --pad-type-colon=none\n";
 	std::cout << "    Scala: no space around a type colon, x:Int.\n";
+	std::cout << '\n';
+	std::cout << "    --align-declarations\n";
+	std::cout << "    Align consecutive declarations in columns: the modifiers, the type,\n";
+	std::cout << "    the name, the initializer and a trailing comment.\n";
+	std::cout << '\n';
+	std::cout << "    --align-assignments\n";
+	std::cout << "    Align the operators of consecutive assignments.\n";
+	std::cout << '\n';
+	std::cout << "    --align-comments\n";
+	std::cout << "    Align the trailing comments of consecutive lines.\n";
+	std::cout << '\n';
+	std::cout << "    --sort-imports\n";
+	std::cout << "    Sort consecutive imports: Java, Kotlin, Scala, Swift, Dart, Go, Rust\n";
+	std::cout << "    and the using directives of C#.\n";
+	std::cout << '\n';
+	std::cout << "    --sort-modifiers\n";
+	std::cout << "    Sort the modifiers of a declaration in the order of the language:\n";
+	std::cout << "    Java, Kotlin, Scala, C#, TypeScript and Swift.\n";
+	std::cout << '\n';
+	std::cout << "    --scala3-syntax\n";
+	std::cout << "    Scala: convert the conditions to the Scala 3 syntax, if (a) b becomes\n";
+	std::cout << "    if a then b, while (a) b becomes while a do b.\n";
+	std::cout << '\n';
+	std::cout << "    --scala3-end-markers=#\n";
+	std::cout << "    Scala: insert an end marker after a definition of # lines or more\n";
+	std::cout << "    without braces, e.g. end f after def f =.\n";
+	std::cout << '\n';
+	std::cout << "    --trailing-commas=always  OR  --trailing-commas=never\n";
+	std::cout << "    Insert or remove the trailing comma of a list spanning lines: Scala,\n";
+	std::cout << "    Kotlin, Rust, Dart, JavaScript and TypeScript.\n";
 	std::cout << '\n';
 	std::cout << "    --pad-closure-braces  OR  --pad-closure-braces=none\n";
 	std::cout << "    Scala: insert or remove the spaces inside the braces of a one-line\n";
@@ -3863,8 +3928,52 @@ void ASOptions::parseOption(const std::string& arg)
 // Return 'false' if the option was not found.
 bool ASOptions::parseOptionContinued(const std::string& arg)
 {
-	// Scala options, here as MSVC limits the length of a chain of else-if
-	if (isOption(arg, "pad-type-colon=after"))
+	// the alignment of consecutive lines, here as MSVC limits the length of a chain of else-if
+	if (isOption(arg, "align-declarations"))
+	{
+		formatter.setAlignDeclarationsMode(true);
+	}
+	else if (isOption(arg, "align-assignments"))
+	{
+		formatter.setAlignAssignmentsMode(true);
+	}
+	else if (isOption(arg, "align-comments"))
+	{
+		formatter.setAlignCommentsMode(true);
+	}
+	else if (isOption(arg, "sort-imports"))
+	{
+		formatter.setSortImportsMode(true);
+	}
+	else if (isOption(arg, "sort-modifiers"))
+	{
+		formatter.setSortModifiersMode(true);
+	}
+	else if (isOption(arg, "trailing-commas=always"))
+	{
+		formatter.setTrailingCommaMode(1);
+	}
+	else if (isOption(arg, "trailing-commas=never"))
+	{
+		formatter.setTrailingCommaMode(-1);
+	}
+	else if (isOption(arg, "scala3-syntax"))
+	{
+		formatter.setScala3SyntaxMode(true);
+	}
+	else if (isParamOption(arg, "scala3-end-markers="))
+	{
+		int minLines = 0;
+		std::string lines = getParam(arg, "scala3-end-markers=");
+		if (!lines.empty())
+			minLines = atoi(lines.c_str());
+		if (minLines < 1 || minLines > 1000)
+			isOptionError(arg);
+		else
+			formatter.setScala3EndMarkers(minLines);
+	}
+	// Scala options
+	else if (isOption(arg, "pad-type-colon=after"))
 	{
 		formatter.setTypeColonPaddingMode(TYPE_COLON_PAD_AFTER);
 	}
@@ -4669,8 +4778,12 @@ extern "C" EXPORT char* STDCALL AStyleMain(const char* pSourceIn,		// the source
 
 	// mask the literals of the languages that need it
 	std::string sourceText(pSourceIn);
+	// the imports, the modifiers and the trailing commas are rewritten before the formatting
+	if (formatter.isTextPassActive())
+		sourceText = formatter.rewriteSource(sourceText);
 	ASLexer lexer(formatter.getFileType());
 	lexer.setJSX(formatter.getJSXMode());
+	lexer.setScala3EndMarkers(formatter.getScala3EndMarkers());
 	lexer.maskSource(sourceText);
 
 	std::stringstream in(sourceText);
@@ -4700,7 +4813,8 @@ extern "C" EXPORT char* STDCALL AStyleMain(const char* pSourceIn,		// the source
 		}
 	}
 
-	std::string textOut = out.str();
+	// the passes over the formatted text, e.g. the alignment of the declarations in columns
+	std::string textOut = formatter.isTextPassActive() ? formatter.alignText(out.str()) : out.str();
 	size_t textSizeOut = textOut.length();
 	char* pTextOut = fpMemoryAlloc((long) textSizeOut + 1);     // call memory allocation function
 	if (pTextOut == nullptr)

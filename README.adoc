@@ -254,6 +254,11 @@ Compared to Artistic Style 3.6.19:
   `xs.map: x =>`, `end` markers) are indented like blocks, re-indenting keeps the meaning of the code. Scala 2 code with
   braces is formatted as always. `--pad-type-colon=after|all|none` sets the spaces around a type colon, as the
   IntelliJ Scala plugin does.
+* *Alignment in columns, every language*: `--align-declarations` (modifiers, type, name, initializer and comment of
+  consecutive declarations, as "Align fields in columns" of IntelliJ), `--align-assignments` and `--align-comments`.
+* *Rewriting, as scalafmt does*: `--sort-imports`, `--sort-modifiers`, `--trailing-commas=always|never`, and for
+  Scala 3 `--scala3-syntax` (`if (a) b` becomes `if a then b`) and `--scala3-end-markers=#` (`end f` after a long
+  `def f =`).
 * *`--block-continuation` / `--align-continuation`*: continuation lines one indent from the statement, as Prettier and
   gofmt do (the default for JavaScript, TypeScript and the new languages), or aligned with a paren or an assignment.
 * *C#*: switch expressions, records, `with` and `new` initializers, one-line auto-properties and accessors, raw strings.

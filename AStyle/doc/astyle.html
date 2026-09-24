@@ -185,6 +185,19 @@
           </ul>
      </li>
 
+     <li><a href="#_Alignment_Options">Alignment &amp; Rewriting <span class="menu-arrow">&#9660;</span></a>
+          <ul>
+               <li><a href="#_align-declarations">align-declarations </a><li>
+               <li><a href="#_align-assignments">align-assignments </a><li>
+               <li><a href="#_align-comments">align-comments </a><li>
+               <li><a href="#_sort-imports">sort-imports </a><li>
+               <li><a href="#_sort-modifiers">sort-modifiers </a><li>
+               <li><a href="#_trailing-commas">trailing-commas </a><li>
+               <li><a href="#_scala3-syntax">scala3-syntax </a><li>
+               <li><a href="#_scala3-end-markers">scala3-end-markers </a><li>
+          </ul>
+     </li>
+
      <!--
      <li><a href="#_Objective_C_Options">Objective C <span class="menu-arrow">&#9660;</span></a>
       <ul>
@@ -3055,6 +3068,223 @@ Foo(bool isFoo);</pre>
         Statements ended by a line break (JavaScript, TypeScript, Go, Kotlin, Swift) are recognized, so that a
         statement without a semicolon is not taken as a continuation of the next line.
     </p>
+
+    <h3 id="_Alignment_Options">Alignment and Rewriting Options</h3>
+
+    <p>
+        These options work on the formatted text: they align consecutive lines in columns, or they rewrite the
+        code, e.g. they sort the imports. They are not set by a brace style, and they are off by default.</p>
+
+    <p>
+        &nbsp;</p>
+    <p id="_align-declarations">
+        <code class="title">--align-declarations</code><br />
+        Align consecutive declarations in columns: the modifiers, the type, the name, the initializer and a
+        trailing comment, as "Align fields in columns" of IntelliJ and <code>AlignConsecutiveDeclarations</code> of
+        clang-format. The declarations of a group are at the same indentation, a blank line or another line ends the
+        group. Every language: the type first in C, C++, Java, C# and Dart, the name first in Kotlin, Scala, Swift,
+        TypeScript and Rust, e.g. <code>val x: Int = 1</code>, the fields of a Go struct with their tags.
+    </p>
+    <div class="code" data-lang="java">
+        <pre>class Account {
+    private int id = 1; // key
+    private String name = "a"; // display name
+    protected long total = 0L;
+    private static final int MAX = 10;
+}
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>class Account {
+    private              int    id    = 1;   // key
+    private              String name  = "a"; // display name
+    protected            long   total = 0L;
+    private static final int    MAX   = 10;
+}
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
+    <p id="_align-assignments">
+        <code class="title">--align-assignments</code><br />
+        Align the operators of consecutive assignments, the compound operators end at the same column, as
+        <code>AlignConsecutiveAssignments</code> of clang-format. Every language.
+    </p>
+    <div class="code">
+        <pre>void init() {
+    width = 640;
+    height = 480;
+    depth += 2;
+    title = "main";
+}
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>void init() {
+    width   = 640;
+    height  = 480;
+    depth  += 2;
+    title   = "main";
+}
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
+    <p id="_align-comments">
+        <code class="title">--align-comments</code><br />
+        Align the trailing comments of consecutive lines, as <code>AlignTrailingComments</code> of clang-format.
+        Every language. A line without a trailing comment ends the group.
+    </p>
+    <div class="code">
+        <pre>int a = 1; // first
+int total = 2; // second
+x = compute(a, total); // third
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>int a = 1;             // first
+int total = 2;         // second
+x = compute(a, total); // third
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
+    <p id="_sort-imports">
+        <code class="title">--sort-imports</code><br />
+        Sort consecutive imports, a blank line separates the groups that are sorted: Java (the static imports
+        last), Kotlin, Scala (also the selectors in braces, the wildcard last; the lines of a group with a relative
+        import are kept), Swift, Dart (<code>dart:</code>, then <code>package:</code>, then the relative imports),
+        Go (by the path), Rust (also the names in braces, <code>self</code> first) and the using directives of C#
+        (<code>System</code> first, then the static usings and the aliases), as the <code>SortImports</code> rule of
+        scalafmt, gofmt and rustfmt. The imports of JavaScript and TypeScript, and the includes of C and C++, are
+        not sorted, their order may matter.
+    </p>
+    <div class="code" data-lang="java">
+        <pre>import java.util.List;
+import static org.junit.Assert.assertEquals;
+import java.io.File;
+import com.example.Model;
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>import com.example.Model;
+import java.io.File;
+import java.util.List;
+import static org.junit.Assert.assertEquals;
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
+    <p id="_sort-modifiers">
+        <code class="title">--sort-modifiers</code><br />
+        Sort the modifiers of a declaration in the order of the language: Java (the order of the Java Language
+        Specification), Kotlin (the coding conventions), Scala (the <code>SortModifiers</code> rule of scalafmt), C#
+        (the order of .NET), TypeScript and Swift. The annotations stay before the modifiers.
+    </p>
+    <div class="code" data-lang="java">
+        <pre>class A {
+    final public static int X = 1;
+    synchronized public void run() {}
+}
+</pre>
+        <p class="code">
+            becomes:</p>
+        <pre>class A {
+    public static final int X = 1;
+    public synchronized void run() {}
+}
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
+    <p id="_trailing-commas">
+        <code class="title">--trailing-commas=always</code><br />
+        <code class="title">--trailing-commas=never</code><br />
+        Insert or remove the trailing comma of a list in parens or brackets spanning lines, its closing bracket on
+        a line of its own, as <code>trailingCommas</code> of scalafmt: Scala, Kotlin, Rust, Dart, JavaScript and
+        TypeScript. A list with one element, the condition of a header and a rest parameter of JavaScript are not
+        changed. Go requires the trailing commas, gofmt keeps them.
+    </p>
+    <div class="code" data-lang="kotlin">
+        <pre>fun f(
+    a: Int,
+    b: Int
+) = listOf(
+    a,
+    b
+)
+</pre>
+        <p class="code">
+            becomes with <code>--trailing-commas=always</code>:</p>
+        <pre>fun f(
+    a: Int,
+    b: Int,
+) = listOf(
+    a,
+    b,
+)
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
+    <p id="_scala3-syntax">
+        <code class="title">--scala3-syntax</code><br />
+        Scala only. Convert the conditions of Scala 2 to the syntax of Scala 3, as
+        <code>rewrite.scala3.convertToNewSyntax</code> of scalafmt: <code>if (a) b</code> becomes
+        <code>if a then b</code>, <code>while (a) b</code> becomes <code>while a do b</code>,
+        <code>for (x &lt;- xs) f(x)</code> becomes <code>for x &lt;- xs do f(x)</code> and
+        <code>for (x &lt;- xs) yield x</code> becomes <code>for x &lt;- xs yield x</code>. A condition spanning
+        lines and the guard of a case clause are not changed.
+    </p>
+    <div class="code" data-lang="scala">
+        <pre>def sign(x: Int): String =
+  if (x &gt; 0) "positive"
+  else if (x &lt; 0) "negative"
+  else "zero"
+</pre>
+        <p class="code">
+            becomes with <code>--scala3-syntax --indent=spaces=2</code>:</p>
+        <pre>def sign(x: Int): String =
+  if x &gt; 0 then "positive"
+  else if x &lt; 0 then "negative"
+  else "zero"
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
+    <p id="_scala3-end-markers">
+        <code class="title">--scala3-end-markers=#</code><br />
+        Scala only. Insert an end marker after a definition without braces of # lines or more, as
+        <code>rewrite.scala3.insertEndMarkerMinLines</code> of scalafmt: <code>end f</code> after
+        <code>def f =</code>, <code>end A</code> after <code>object A:</code>, also after a class, a trait, an enum,
+        a given, an extension and a <code>val</code>. An end marker that is there is kept.
+    </p>
+    <div class="code" data-lang="scala">
+        <pre>def sum(xs: List[Int]): Int =
+  var total = 0
+  for x &lt;- xs do total += x
+  total
+</pre>
+        <p class="code">
+            becomes with <code>--scala3-end-markers=4 --indent=spaces=2</code>:</p>
+        <pre>def sum(xs: List[Int]): Int =
+  var total = 0
+  for x &lt;- xs do total += x
+  total
+end sum
+</pre>
+    </div>
+
+    <p>
+        &nbsp;</p>
+    <hr />
 
     <h3 id="_Objective_C_Options"><span style="white-space: nowrap;">Objective-C</span> Options</h3>
 

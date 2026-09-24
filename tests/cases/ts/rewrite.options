@@ -1,0 +1,4 @@
+--indent=spaces=2
+--sort-modifiers
+--align-declarations
+--trailing-commas=never

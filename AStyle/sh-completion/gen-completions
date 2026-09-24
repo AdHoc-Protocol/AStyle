@@ -98,6 +98,31 @@ parser:option "--pad-type-colon"
    :description "Scala: set the space padding around a type colon"
    :choices {"after", "all", "none"}
 
+parser:flag "--align-declarations"
+   :description "Align consecutive declarations in columns"
+
+parser:flag "--align-assignments"
+   :description "Align the operators of consecutive assignments"
+
+parser:flag "--align-comments"
+   :description "Align the trailing comments of consecutive lines"
+
+parser:flag "--sort-imports"
+   :description "Sort consecutive imports"
+
+parser:flag "--sort-modifiers"
+   :description "Sort the modifiers of a declaration"
+
+parser:flag "--scala3-syntax"
+   :description "Scala: convert the conditions to the Scala 3 syntax"
+
+parser:option "--trailing-commas"
+   :description "Insert or remove the trailing comma of a list spanning lines"
+   :choices {"always", "never"}
+
+parser:option "--scala3-end-markers"
+   :description "Scala: insert end markers after definitions of # lines or more"
+
 parser:option "--pad-closure-braces"
    :description "Scala: the spaces inside the braces of a one-line lambda"
    :args "?"
