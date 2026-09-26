@@ -9218,6 +9218,16 @@ void ASFormatter::checkIfTemplateOpener()
 {
     assert(!isInTemplate && currentChar == '<');
 
+    // a shift '<<' never opens a type argument list; taken for one, it is closed by the '>>' of a following '>>>'
+    // and that operator is then split: (y << 1 >>> 31) became (y << 1 > >> 31)
+    if (isMaskedStyle()
+            && ((charNum + 1 < currentLine.length() && currentLine[charNum + 1] == '<')
+                || (charNum > 0 && currentLine[charNum - 1] == '<')))
+    {
+        isInTemplate = false;
+        return;
+    }
+
     // find first char after the '<' operators
     size_t firstChar = currentLine.find_first_not_of("< \t", charNum);
     if (firstChar == std::string::npos
